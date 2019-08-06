@@ -1,0 +1,274 @@
+---
+title: "create_annotation"
+author: "Victor Yuan"
+date: "02/08/2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+Outline
+
+1. Get illumina provided cpg and genome locations
+2. Use annotatr to provide 'basic' annotations, such as cpg island, gene elements, enhacners
+3. Use published datasets to provide other interesting annotation info (e.g. imprinting)
+4. Use rtracklayer::liftOver to map from build hg19 to build hg38 genome locations
+
+# Libraries 
+
+```{r}
+library(rtracklayer) 
+library(annotatr)
+library(tidyverse)
+library(readxl)
+library(fuzzyjoin)
+library(janitor)
+```
+
+# 1. Illumina annotation
+
+We start with the illumina provided locations of each probe. Note that Illumina has released multiple versions of the EPIC, each with a different set of probes (200-2000 probes can be different between arrays).
+
+ Here I combine the b4 annotation with those probes that were removed from B2 to B3 versions. This set of probes
+will be a starting point for cpgs to annotate.
+
+TODO: Add in b2 and b1 annotations to ensure all EPIC probes in the universe will be covered.
+TODO: Add in 450k probes
+TODO: Add in 27k probes?
+
+```{r}
+b4 <- read_csv('Z:/Victor/Data/DNAm annotations/MethylationEPIC_v-1-0_B4.csv', skip = 7)
+b4_missing <- read_csv('Z:/Victor/Data/DNAm annotations/MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2) Annotations.csv')
+anno <- bind_rows(b4, b4_missing %>% mutate_at(c('AddressA_ID', 'AddressB_ID'), as.character))
+```
+
+# 2. Use annotatr to add UCSC annotations, and FANTOM5 enhancers
+
+The gather and spread functions take 10 hours to complete.
+
+First I filter to the illumina information to keep. 
+
+Except for Start, End, chr and cpg_id columns, I rename others with the prefix 'ilmn', to indicate 
+they are from the illumina annotation file. People can refer to the illumina files for description 
+of those variables
+
+```{r}
+# clean up annotation
+anno <- anno %>% mutate(Strand = ifelse(Strand == 'F', '+', '-'),
+                start = MAPINFO,
+                end = MAPINFO,
+                chr = paste0('chr', CHR),
+                cpg_id = Name) %>%
+  
+  # keep basic information
+  dplyr::select(cpg_id, chr, start, end, Strand, AddressA_ID:Forward_Sequence) %>%
+  
+  # remove rs, and control probes
+  filter(grepl('^[(cg)(ch)]{1}', cpg_id)) %>%
+  
+  # add illumina identifier
+  rename_at(vars(-(1:5)), ~paste0('ilmn_', .))
+
+# coerce to granges
+anno_GR <- makeGRangesFromDataFrame(anno, keep.extra.columns = T)
+
+# select annotations to use
+annots <- c('hg19_enhancers_fantom',
+            'hg19_cpgs', 
+            'hg19_genes_1to5kb',
+            'hg19_genes_promoters', 
+            'hg19_genes_5UTRs',
+            'hg19_genes_exons',
+            'hg19_genes_intronexonboundaries',
+            'hg19_genes_introns',
+            'hg19_genes_3UTRs',
+            'hg19_genes_intergenic')
+annots <- build_annotations(genome = 'hg19', annotations = annots)
+
+# annotate the base annotation
+annotated <- annotate_regions(regions = anno_GR, annotations = annots, ignore.strand = T) %>% 
+  as_tibble
+
+# clean it up
+annotated
+x1 <- length(unique(annotated$cpg_id))
+
+system.time(
+x <- annotated %>% 
+  
+  # 1. remove identifiers from annot.id, i.e "intron.9999" should be just called "intron"
+  mutate(annot.id = str_extract(annot.id, '^[A-z0-9]+'),
+         annot.type = str_extract(annot.type, '(?<=hg19_)[^_]+')
+         ) %>%
+  dplyr::select(-annot.seqnames, -annot.start, -annot.end, -annot.strand) %>%
+  
+  # 2. paste together all elements, grouped by cpg-related and gene-related elements
+  ### I'm not sure but this step might be able to skip
+  group_by(cpg_id,annot.type) %>%
+  summarize(
+    # paste(unique(.)) ensures all nonunique mappings are retained
+    cpg = paste(unique(cpg_id)),
+    chr = paste(unique(seqnames)),
+    start = paste(unique(start)),
+    end = paste(unique(end)),
+    
+    id = paste(annot.id, collapse = ", "),
+    width = paste(annot.width, collapse = ", "),
+    tx_id = paste(annot.tx_id, collapse = ", "),
+    gene_id = paste(annot.gene_id, collapse = ", "),
+    symbol = paste(annot.symbol, collapse = ", "))  %>%
+  
+  # 3. now spread multiple values across columns
+  # first create a temporary variable to spread by, using gather() and unite()
+  ungroup() %>%
+  dplyr::select(-cpg_id)  %>%
+  gather(variable, value, -(annot.type:end)) %>%
+  unite(temp, annot.type, variable, sep = '_') %>%
+  spread(temp, value) %>%
+  
+  # 4. clean up
+  # remove uninformative columns
+  dplyr::select(-enhancers_gene_id , -enhancers_symbol, -enhancers_tx_id, 
+                -cpg_gene_id, -cpg_symbol, -cpg_tx_id) %>%
+  
+  # cpg_id == inter replace with "sea"
+  mutate(cpg_id = ifelse(cpg_id == 'inter', 'sea', cpg_id)) %>%
+  mutate_all(~replace(., . == 'NA', NA_character_))
+) # takes 10 hours
+# ensure the number of cpgs ended up with equals the number of unique cpgs starting out with
+x1 == nrow(x) # must be T 
+
+# now add back in the illumina columns
+  
+```
+saveRDS(x, '../../data/main/interim/annotation.rds')
+write_csv(x, '../../data/main/processed/annotation.csv')
+
+x <- readRDS('Z:/Victor/Projects/NIH - cells/data/main/interim/annotation.rds')
+
+# 3. Add other annotations
+
+PMDs
+
+https://www.pnas.org/content/110/15/6037
+
+Schroeder DI, Blair JD, Lott P, Yu HOK, Hong D, Crary F, et al. The human placenta methylome. PNAS. 2013 Apr 9;110(15):6037–42. 
+
+```{r}
+# load pmds
+pmds <- read_xls('Z:/Victor/Projects/NIH - cells/data/external/placental_pmds.xls', col_names = F)
+colnames(pmds) <- c('chr', 'start', 'end')
+
+# join pmds using fuzzyjoin::genome_left_join
+anno <- x %>%
+  mutate_at(c('start', 'end'), as.numeric) %>%
+  genome_left_join(pmds) %>%
+  
+  # pmd ID is the genome location
+  mutate(pmd_id = ifelse(!is.na(chr.y), paste0(chr.y, ':', start.y, '-', end.y), NA),
+         pmd_width = end.y - start.y) %>%
+  dplyr::rename(chr = chr.x, start = start.x, end = end.x) %>%
+  select(-contains('.y'))
+```
+
+Imprinting
+
+Created by Giulia
+
+```{r}
+imprint <- read_xlsx('Imprinted gene database.xlsx', col_names = T, shee = 'Imprinted genes and DMRs')
+
+# non-placental specific imprinted genes
+imprint %>% clean_names %>%
+  
+  
+  
+  
+  
+  
+  select(gene, contains('location')) %>% 
+  
+  
+  
+  
+  
+  separate(dmr_location, into = c('dmr_location_1', 'dmr_location_2', 'dmr_location_3', 
+                                  'dmr_location_4', 'dmr_location_5'), 
+           sep = '[\\s]*[;][\\s]*', fill = 'right') %>%
+  gather(key = 'dmr_location_k', value = 'dmr_location_v', dmr_location_1:dmr_location_5,
+         na.rm = F) %>%
+  arrange(chr, start)  %>% 
+  distinct(gene_location, dmr_location_v, .keep_all = T) %>% View()
+  
+  
+    mutate(in_gene = ifelse(grepl('Gene', location_type), 'Gene', NA),
+         in_dmr = ifelse(grepl('DMR', location_type), 'DMR', NA)) %>%
+  separate(gene_location, into = c('gene_chr', 'gene_start', 'gene_end'), convert = T, remove = F) 
+  
+  
+  
+  separate(dmr_location_v, into = c('dmr_chr', 'dmr_start', 'dmr_end'), fill = 'right',
+           remove = F) %>%
+  dplyr::rename(imprinted_gene_location = gene_location, imprinted_dmr_location = dmr_location_v) %>%
+  select(-dmr_location_k, -chr, -end, -start) %>%
+  arrange(dmr_chr, dmr_start) %>% View()
+  
+
+# non placenta-specific imprints
+anno
+
+# placenta-specific
+
+
+```
+
+# 4. Map from hg19 to hg38
+
+I skip this step for now, since it results in a loss of some cpgs.
+
+```{r eval = F}
+# load chain file
+chain <- import.chain("hg19ToHg38.over.chain")
+chain
+
+# clean anno
+anno <- anno %>%
+  # rename so coercible to GRANGES 
+  dplyr::rename(cpg_id = Name, chr = CHR, start = MAPINFO) %>% 
+  mutate(end = start, Strand = ifelse(Strand == 'F', '+', '-')) %>%
+  
+  # drop columns not interested in
+  dplyr::select(cpg_id, chr, start, end, Strand, AddressA_ID:Forward_Sequence) %>%
+  
+  # remove rs, and control probes
+  filter(grepl('^[(cg)(ch)]{1}', cpg_id)) %>%
+  makeGRangesFromDataFrame(keep.extra.columns = T)
+
+seqlevelsStyle(anno) <- 'UCSC'
+
+anno38 <- liftOver(anno, chain) %>% unlist
+
+length(anno) - length(anno38) # loses 247 loci
+setdiff(anno$cpg_id, anno38$cpg_id) # these specific loci
+```
+
+
+# Column descriptions
+
+```{r}
+## column descriptors
+colnames(x)
+# cpg: cpg identifier
+# chr: chromosome position
+# start, end: cpg position in bp 
+# cpg_id: relation to cpg island features. uses UCSC cpg islands as reference, then definitions for shelves, shores, and seas are used
+# cpg_width: width in bp of the cpg island -related feature
+# enhancers_id: fantom5 enhancer
+# enhancers_width: width in bp of the fantom5 enhancer
+# genes_: columns are retrieved from txdb.hsapiens.ucsc.hg19.knowngene
+# genes_gene_id: I'm not sure what this is TBH
+# genes_id: gene-related elemtn, e.g. promoters, introns/exons, based off of UCSC
+# genes_symbol: Gene symbol
+# genes_tx_id: transcript identifier
+# genes_width: width in bp of gene element
+```
