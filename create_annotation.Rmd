@@ -40,19 +40,7 @@ TODO: Add in 27k probes?
 b4 <- read_csv('Z:/Victor/Data/DNAm annotations/MethylationEPIC_v-1-0_B4.csv', skip = 7)
 b4_missing <- read_csv('Z:/Victor/Data/DNAm annotations/MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2) Annotations.csv')
 anno <- bind_rows(b4, b4_missing %>% mutate_at(c('AddressA_ID', 'AddressB_ID'), as.character))
-```
 
-# 2. Use annotatr to add UCSC annotations, and FANTOM5 enhancers
-
-The gather and spread functions take 10 hours to complete.
-
-First I filter to the illumina information to keep. 
-
-Except for Start, End, chr and cpg_id columns, I rename others with the prefix 'ilmn', to indicate 
-they are from the illumina annotation file. People can refer to the illumina files for description 
-of those variables
-
-```{r}
 # clean up annotation
 anno <- anno %>% mutate(Strand = ifelse(Strand == 'F', '+', '-'),
                 start = MAPINFO,
@@ -68,7 +56,19 @@ anno <- anno %>% mutate(Strand = ifelse(Strand == 'F', '+', '-'),
   
   # add illumina identifier
   rename_at(vars(-(1:5)), ~paste0('ilmn_', .))
+```
 
+# 2. Use annotatr to add UCSC annotations, and FANTOM5 enhancers
+
+The gather and spread functions take 10 hours to complete.
+
+First I filter to the illumina information to keep. 
+
+Except for Start, End, chr and cpg_id columns, I rename others with the prefix 'ilmn', to indicate 
+they are from the illumina annotation file. People can refer to the illumina files for description 
+of those variables
+
+```{r}
 # coerce to granges
 anno_GR <- makeGRangesFromDataFrame(anno, keep.extra.columns = T)
 
@@ -176,82 +176,94 @@ Imprinting
 Created by Giulia
 
 ```{r}
-imprint <- read_xlsx('Imprinted gene database.xlsx', col_names = T, shee = 'Imprinted genes and DMRs')
+imprint <- read_xlsx('Imprinted gene database.xlsx', col_names = T, shee = 'Imprinted genes and DMRs')%>%
+  clean_names() %>%
+  mutate(in_gene = ifelse(grepl('Gene', location_type), 'Gene', NA),
+         in_dmr = ifelse(grepl('DMR', location_type), 'DMR', NA))
 
-# non-placental specific imprinted genes
-imprint %>% clean_names %>%
+# imprinted genes
+imprint_gene <- imprint  %>%
+  select(gene, gene_location, placenta_specific, in_gene) %>% 
+  separate(gene_location, into = c('chr', 'start', 'end'), convert = T)  %>%
   
+  # create imprint_gene columns to join to anno
+  dplyr::rename(imprinted_gene = gene) %>% 
+  filter(!is.na(imprinted_gene)) %>%
+  mutate(imprinted_gene_general = ifelse(is.na(placenta_specific), imprinted_gene, NA),
+         imprinted_gene_placenta = ifelse(!is.na(placenta_specific), imprinted_gene, NA)) 
+
+anno <- anno %>% 
+  genome_left_join(imprint_gene %>% select(-imprinted_gene, -placenta_specific, -in_gene)) %>%
+  dplyr::rename(chr = chr.x, start = start.x, end = end.x) %>%
+  select(-contains('.y'))
+
+# duplicate rows for multiples genes, combine into single rows as output
+anno_x <- anno %>% 
+  group_by(cpg) %>% 
+  summarize(imprinted_gene_general = paste(imprinted_gene_general, collapse = ';'))
+
+anno <- anno %>% select(-imprinted_gene_general) %>% distinct() %>%
+  left_join(anno_x) %>%
+  mutate(imprinted_gene_general = ifelse(imprinted_gene_general == 'NA', NA, imprinted_gene_general))
+
+
+# imprinted dmrs
+imprint_dmr <- imprint %>%
+  filter(in_dmr == 'DMR') %>%
   
-  
-  
-  
-  
-  select(gene, contains('location')) %>% 
-  
-  
-  
-  
-  
+  # input: multiple dmrs per row, output: single dmr per row 
+  select(dmr_location, placenta_specific) %>%
   separate(dmr_location, into = c('dmr_location_1', 'dmr_location_2', 'dmr_location_3', 
                                   'dmr_location_4', 'dmr_location_5'), 
            sep = '[\\s]*[;][\\s]*', fill = 'right') %>%
-  gather(key = 'dmr_location_k', value = 'dmr_location_v', dmr_location_1:dmr_location_5,
-         na.rm = F) %>%
-  arrange(chr, start)  %>% 
-  distinct(gene_location, dmr_location_v, .keep_all = T) %>% View()
+  gather(key = 'key', value = 'dmr_location', dmr_location_1:dmr_location_5,
+         na.rm = T) %>%
+  select(-key) %>%
   
+  # clean, make new indicator columns for dmrs
+  mutate(dmr_location = gsub(' ', '', dmr_location),
+         imprinted_dmr_general = ifelse(is.na(placenta_specific), dmr_location, NA),
+         imprinted_dmr_placenta = ifelse(!is.na(placenta_specific), dmr_location, NA))  %>%
+  separate(dmr_location, into = c('chr', 'start', 'end'), convert = T)  %>%
+  select(-placenta_specific)
   
-    mutate(in_gene = ifelse(grepl('Gene', location_type), 'Gene', NA),
-         in_dmr = ifelse(grepl('DMR', location_type), 'DMR', NA)) %>%
-  separate(gene_location, into = c('gene_chr', 'gene_start', 'gene_end'), convert = T, remove = F) 
+anno <- anno %>% 
+  genome_left_join(imprint_dmr) %>%
+  dplyr::rename(chr = chr.x, start = start.x, end = end.x) %>%
+  select(-contains('.y')) %>%
   
-  
-  
-  separate(dmr_location_v, into = c('dmr_chr', 'dmr_start', 'dmr_end'), fill = 'right',
-           remove = F) %>%
-  dplyr::rename(imprinted_gene_location = gene_location, imprinted_dmr_location = dmr_location_v) %>%
-  select(-dmr_location_k, -chr, -end, -start) %>%
-  arrange(dmr_chr, dmr_start) %>% View()
-  
-
-# non placenta-specific imprints
-anno
-
-# placenta-specific
-
-
+  # rearrange columns
+  clean_names %>%
+  select(cpg:end, strand, cpg_id:genes_width, pmd_id:imprinted_dmr_placenta, contains('ilmn'))
 ```
 
 # 4. Map from hg19 to hg38
 
-I skip this step for now, since it results in a loss of some cpgs.
+I provide a mapping from hg19 to hg38 coordinates. Note that this loses 247 cpgs.
 
-```{r eval = F}
+```{r eval = T}
 # load chain file
 chain <- import.chain("hg19ToHg38.over.chain")
 chain
 
-# clean anno
-anno <- anno %>%
-  # rename so coercible to GRANGES 
-  dplyr::rename(cpg_id = Name, chr = CHR, start = MAPINFO) %>% 
-  mutate(end = start, Strand = ifelse(Strand == 'F', '+', '-')) %>%
-  
-  # drop columns not interested in
-  dplyr::select(cpg_id, chr, start, end, Strand, AddressA_ID:Forward_Sequence) %>%
-  
-  # remove rs, and control probes
-  filter(grepl('^[(cg)(ch)]{1}', cpg_id)) %>%
+# coerce to granges object
+anno_gr38 <- anno %>%
   makeGRangesFromDataFrame(keep.extra.columns = T)
+seqlevelsStyle(anno_gr38) <- 'UCSC'
 
-seqlevelsStyle(anno) <- 'UCSC'
+# hg19 to hg38 coordinates
+anno_gr38 <- liftOver(anno_gr38, chain) %>% unlist
 
-anno38 <- liftOver(anno, chain) %>% unlist
-
-length(anno) - length(anno38) # loses 247 loci
-setdiff(anno$cpg_id, anno38$cpg_id) # these specific loci
+nrow(anno) - length(anno_gr38) # loses 247 loci
+setdiff(anno$cpg, anno_gr38$cpg) # these specific loci
 ```
 
+# Save data
+
+```{r eval = F}
+saveRDS(anno, file = 'hg19_epic_annotation.rds')
+saveRDS(anno_gr38, file = 'hg38_epic_annotation.rds')
+```
 
 # Column descriptions
 
@@ -271,4 +283,11 @@ colnames(x)
 # genes_symbol: Gene symbol
 # genes_tx_id: transcript identifier
 # genes_width: width in bp of gene element
+# pmd_id, pmd_width: indicates which pmd a given cpg lies in. list taken from d.i.schoreder et al. 2013
+# imprinted_gene_: indicates the imprinted gene a given cpg lies in, placental or non-tissue specific
+# imprinted_dmr_: indicates the imprinted dmr a given cpg lies in, placental or non-tissue specific
+# imprinting regions/genes combined from several databases and primary articles, process by GDG.
+# columns prefixed by 'ilmn_' come from the illumina provided annotation files
 ```
+
+
