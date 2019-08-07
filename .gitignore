@@ -2,3 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
+*.over.chain
+*.rds
+*.xlsx
+*.Rproj
