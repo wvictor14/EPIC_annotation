@@ -176,7 +176,7 @@ Imprinting
 Created by Giulia
 
 ```{r}
-imprint <- read_xlsx('Imprinted gene database.xlsx', col_names = T, shee = 'Imprinted genes and DMRs')%>%
+imprint <- read_xlsx('Imprinted gene database.xlsx', col_names = T, sheet = 'Imprinted genes and DMRs')%>%
   clean_names() %>%
   mutate(in_gene = ifelse(grepl('Gene', location_type), 'Gene', NA),
          in_dmr = ifelse(grepl('DMR', location_type), 'DMR', NA))
