@@ -1589,18 +1589,12 @@ div.tocify {
 
 <p>This repository contains code for generating an annotation for the Illumina EPIC methylation array.</p>
 <p>There are two annotation files, one mapped to <strong>hg19</strong> and one mapped to <strong>hg38/GR38</strong>. They have the same annotation information (columns), but the hg38 annotation is missing 237 probes, since some mappings are lost from converting from hg19 to hg38.</p>
-<pre class="r"><code>anno &lt;- readRDS(file = &#39;hg19_epic_annotation.rds&#39;)
-anno_gr38 &lt;- readRDS(file = &#39;hg38_epic_annotation.rds&#39;)</code></pre>
 <div id="the-process" class="section level1">
 <h1>The process</h1>
 <div id="starting-annotation" class="section level2">
 <h2>1. Starting annotation</h2>
 <p>I started with the default annotations provided by Illumina. I used two files, the latest b4 annotation (<em>MethylationEPIC_v-1-0_B4.csv</em>), and the list of probes that are missing between b3 and b2 (<em>MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2) Annotations.csv</em>). Both can be found on the product files list from <a href="https://support.illumina.com/downloads/infinium-methylationepic-v1-0-product-files.html">Illumina’s website</a>.</p>
 <p>Using the intersection of these two lists of probes, I used the provided genomic location (chromomsome and position) to map annotations to each cpg. Note that Illumina’s provided annotations are based on hg19.</p>
-<pre class="r"><code>anno %&gt;% select(cpg, chr, start) %&gt;%
-  dplyr::slice(1:10) %&gt;%
-  kable() %&gt;%
-  kable_styling(bootstrap_options = c(&quot;striped&quot;, &quot;hover&quot;, &quot;condensed&quot;, &quot;responsive&quot;)) </code></pre>
 <table class="table table-striped table-hover table-condensed table-responsive" style="margin-left: auto; margin-right: auto;">
 <thead>
 <tr>
@@ -1729,11 +1723,6 @@ chr16
 </tbody>
 </table>
 <p>I also kept some probe-specific information that I thought some may find useful. The columns for these variables are all prefixed with “ilmn_”.</p>
-<pre class="r"><code>anno %&gt;% select(cpg, chr, start, contains(&#39;ilmn&#39;)) %&gt;%
-  dplyr::slice(1:10) %&gt;%
-  kable() %&gt;%
-  kable_styling(bootstrap_options = c(&quot;striped&quot;, &quot;hover&quot;, &quot;condensed&quot;, &quot;responsive&quot;)) %&gt;%
-  scroll_box(width = &#39;100%&#39;)</code></pre>
 <div style="border: 1px solid #ddd; padding: 5px; overflow-x: scroll; width:100%; ">
 <table class="table table-striped table-hover table-condensed table-responsive" style="margin-left: auto; margin-right: auto;">
 <thead>
@@ -2133,11 +2122,6 @@ TGGGGTGAGTGAGACCACGGGCCTCACCCCGGACCAAGTTAAGCGGAATCTGGAGAAATA[CG]GCCTCAATGGTAAGTG
 <p>I used the R package annotatr to access UCSC annotations for cpg islands and transcripts, and then FANTOM5 for enhancers.</p>
 <div id="ucsc-transcript-and-cpg-island--related-elements" class="section level3">
 <h3>UCSC transcript and cpg island -related elements:</h3>
-<pre class="r"><code>anno %&gt;% select(cpg, chr, start, cpg_id:cpg_width, genes_id:genes_width) %&gt;%
-  dplyr::slice(1:10) %&gt;%
-  kable() %&gt;%
-  kable_styling(bootstrap_options = c(&quot;striped&quot;, &quot;hover&quot;, &quot;condensed&quot;, &quot;responsive&quot;)) %&gt;%
-  scroll_box(width = &#39;100%&#39;)</code></pre>
 <div style="border: 1px solid #ddd; padding: 5px; overflow-x: scroll; width:100%; ">
 <table class="table table-striped table-hover table-condensed table-responsive" style="margin-left: auto; margin-right: auto;">
 <thead>
@@ -2468,12 +2452,6 @@ uc002drp.1, uc002drn.1, uc002dro.1, uc010vct.2
 </div>
 <div id="enhancers" class="section level3">
 <h3>Enhancers</h3>
-<pre class="r"><code>anno %&gt;% select(cpg, chr, start, contains(&#39;enhancer&#39;)) %&gt;%
-  filter(!is.na(enhancers_id)) %&gt;%
-  dplyr::slice(1:10) %&gt;%
-  kable() %&gt;%
-  kable_styling(bootstrap_options = c(&quot;striped&quot;, &quot;hover&quot;, &quot;condensed&quot;, &quot;responsive&quot;)) %&gt;%
-  scroll_box(width = &#39;100%&#39;)</code></pre>
 <div style="border: 1px solid #ddd; padding: 5px; overflow-x: scroll; width:100%; ">
 <table class="table table-striped table-hover table-condensed table-responsive" style="margin-left: auto; margin-right: auto;">
 <thead>
@@ -2673,12 +2651,6 @@ enhancer
 <div id="pmds-from-schroeder-et-al.-2013" class="section level3">
 <h3>PMDs from Schroeder et al. 2013:</h3>
 <p>Taken from the primary article.</p>
-<pre class="r"><code>anno %&gt;% select(cpg, chr, start, contains(&#39;pmd&#39;)) %&gt;%
-  filter(!is.na(pmd_id)) %&gt;%
-  dplyr::slice(1:10) %&gt;%
-  kable() %&gt;%
-  kable_styling(bootstrap_options = c(&quot;striped&quot;, &quot;hover&quot;, &quot;condensed&quot;, &quot;responsive&quot;)) %&gt;%
-  scroll_box(width = &#39;100%&#39;)</code></pre>
 <div style="border: 1px solid #ddd; padding: 5px; overflow-x: scroll; width:100%; ">
 <table class="table table-striped table-hover table-condensed table-responsive" style="margin-left: auto; margin-right: auto;">
 <thead>
@@ -2879,12 +2851,6 @@ chr14:37161928-37746904
 <h3>Imprinting regions</h3>
 <p>Both general and placenta specific from GeneImprint and OTAGO databases, plus a court et al. and hanna et al. DMR imprinting papers.</p>
 <p>These imprinting information was summarized and provided by GDG</p>
-<pre class="r"><code>anno %&gt;% select(cpg, chr, start, contains(&#39;imprint&#39;)) %&gt;%
-  filter(!is.na(imprinted_gene_placenta) | !is.na(imprinted_gene_general)) %&gt;%
-  dplyr::slice(1:10) %&gt;%
-  kable() %&gt;%
-  kable_styling(bootstrap_options = c(&quot;striped&quot;, &quot;hover&quot;, &quot;condensed&quot;, &quot;responsive&quot;)) %&gt;%
-  scroll_box(width = &#39;100%&#39;)</code></pre>
 <div style="border: 1px solid #ddd; padding: 5px; overflow-x: scroll; width:100%; ">
 <table class="table table-striped table-hover table-condensed table-responsive" style="margin-left: auto; margin-right: auto;">
 <thead>
@@ -3150,7 +3116,7 @@ NA
 </div>
 <div id="map-to-hg38" class="section level2">
 <h2>3. Map to hg38</h2>
-<p>Lastly I mapped the annotation to the genome assembly hg38 using UCSC liftover’s tool implemented in R.</p>
+<p>Lastly I mapped the annotation to the genome assembly hg38 using UCSC liftover’s tool implemented in R. This results in a loss of 237 cpgs.</p>
 </div>
 </div>
 
