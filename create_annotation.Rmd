@@ -256,6 +256,12 @@ anno_gr38 <- liftOver(anno_gr38, chain) %>% unlist
 
 nrow(anno) - length(anno_gr38) # loses 247 loci
 setdiff(anno$cpg, anno_gr38$cpg) # these specific loci
+
+# clean
+anno_gr38 <- anno_gr38 %>% as_tibble %>%
+  dplyr::rename(chr = seqnames) %>%
+  select(cpg, everything())
+
 ```
 
 # Save data
