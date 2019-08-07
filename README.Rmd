@@ -114,5 +114,5 @@ anno %>% select(cpg, chr, start, contains('imprint')) %>%
 
 ## 3. Map to hg38
 
-Lastly I mapped the annotation to the genome assembly hg38 using UCSC liftover's tool implemented in R.
+Lastly I mapped the annotation to the genome assembly hg38 using UCSC liftover's tool implemented in R. This results in a loss of 237 cpgs.
 
