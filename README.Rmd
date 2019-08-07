@@ -13,6 +13,10 @@ editor_options:
   chunk_output_type: console
 ---
 
+```{r include = FALSE}
+knitr::opts_chunk$set(echo=FALSE)
+```
+
 This repository contains code for generating an annotation for the Illumina EPIC methylation array.
 
 There are two annotation files, one mapped to **hg19** and one mapped to **hg38/GR38**. They have the same
