@@ -271,6 +271,108 @@ saveRDS(anno, file = 'hg19_epic_annotation.rds')
 saveRDS(anno_gr38, file = 'hg38_epic_annotation.rds')
 ```
 
+# September 27th update
+
+PMD coordinates were actually in hg18 coordinates. So here I convert them to hg19/gr38 before replacing into the annotations
+
+```{r}
+anno <- readRDS(file = 'hg19_epic_annotation.rds')
+anno_gr38 <- readRDS(file = 'hg38_epic_annotation.rds')
+```
+
+## liftover
+
+```{r}
+pmds <- read_xls('Z:/Victor/Projects/NIH - cells/data/external/placental_pmds.xls', col_names = F)
+colnames(pmds) <- c('chr', 'start', 'end')
+
+# make an identifier for original pmds
+pmds <- pmds %>% 
+  mutate(width = end-start,
+         ID = paste0('pmd_', 1:n()))
+
+# load chain file
+chain_hg18_hg19 <- import.chain("hg18ToHg19.over.chain")
+chain_hg18_hg19
+
+
+# coerce to granges object
+pmds_hg18 <- pmds %>%
+  makeGRangesFromDataFrame(keep.extra.columns = T)
+
+# hg18 to hg19 coordinates
+pmds_hg19 <- liftOver(pmds_hg18, chain_hg18_hg19) %>% unlist
+
+length(pmds_hg19) - length(pmds_hg18) # gains 4681 ranges
+setdiff(pmds_hg18$ID, pmds_hg19$ID) # lost 1 pmd
+
+
+pmds_hg19 %>%
+  as_tibble() %>%
+  group_by(ID) %>%
+  filter(n() > 1) %>%
+  left_join(pmds, by = 'ID')
+```
+
+Note that by lifting over, many of the pmds have been "broken" up. It seems that in hg19 many sequences were added into the genome. So a pmd is broken up when there is a new sequence added somewhere into the middle of it.
+
+Should I take the remapped hg19 pmds as is?
+Or should I say take the boundary for each original pmd in it's new coordinates, and merge broken pieces back together?
+
+For now, I leave the remapped pmds as is.
+
+```{r}
+# hg18 to gr38
+
+# load chain file
+chain_hg18_gr38 <- import.chain("hg18ToHg38.over.chain")
+chain_hg18_gr38
+
+pmds_gr38 <- liftOver(pmds_hg18, chain_hg18_gr38) %>% unlist
+
+length(pmds_gr38) - length(pmds_hg18) # gains 43355 ranges
+setdiff(pmds_hg18$ID, pmds_gr38$ID) # lost 6 pmds
+```
+
+## Add to annotation
+
+```{r}
+#hg19
+pmds_hg19 <- pmds_hg19 %>%
+  as_tibble() %>% 
+  rename(chr = seqnames,
+         pmd_width = width) %>%
+  mutate(pmd_id = paste0(chr, ':', start, '-', end)) %>%
+  dplyr::select(-ID, -strand)
+
+anno <- anno %>%
+  dplyr::select(-pmd_id, -pmd_width) %>%
+  genome_left_join(pmds_hg19, by = c('chr', 'start', 'end')) %>%
+  rename(chr = chr.x, start = start.x, end = end.x) %>%
+  dplyr::select(-contains('.y'))
+
+
+# gr38
+pmds_gr38 <- pmds_gr38 %>%
+  as_tibble() %>% 
+  rename(chr = seqnames,
+         pmd_width = width) %>%
+  mutate(pmd_id = paste0(chr, ':', start, '-', end)) %>%
+  dplyr::select(-ID, -strand)
+
+anno_gr38 <- anno_gr38 %>%
+  dplyr::select(-pmd_id, -pmd_width) %>%
+  genome_left_join(pmds_gr38, by = c('chr', 'start', 'end')) %>%
+  rename(chr = chr.x, start = start.x, end = end.x) %>%
+  dplyr::select(-contains('.y'))
+```
+
+## Save data
+
+```{r eval = F}
+saveRDS(anno, file = 'hg19_epic_annotation.rds')
+saveRDS(anno_gr38, file = 'hg38_epic_annotation.rds')
+```
 # Column descriptions
 
 ```{r}
