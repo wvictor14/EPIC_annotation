@@ -33,7 +33,7 @@ We start with the illumina provided locations of each probe. Note that Illumina 
 will be a starting point for cpgs to annotate.
 
 TODO: Add in b2 and b1 annotations to ensure all EPIC probes in the universe will be covered.
-TODO: Add in 450k probes
+TODO: Add in 450k probes?
 TODO: Add in 27k probes?
 
 ```{r}
@@ -173,7 +173,7 @@ anno <- x %>%
 
 Imprinting
 
-Created by Giulia
+List of imprinting regions were created by Giulia 
 
 ```{r}
 imprint <- read_xlsx('Imprinted gene database.xlsx', col_names = T, sheet = 'Imprinted genes and DMRs')%>%
@@ -271,7 +271,7 @@ saveRDS(anno, file = 'hg19_epic_annotation.rds')
 saveRDS(anno_gr38, file = 'hg38_epic_annotation.rds')
 ```
 
-# September 27th update
+# 2019-09-27 Update
 
 PMD coordinates were actually in hg18 coordinates. So here I convert them to hg19/gr38 before replacing into the annotations
 
@@ -373,6 +373,26 @@ anno_gr38 <- anno_gr38 %>%
 saveRDS(anno, file = 'hg19_epic_annotation.rds')
 saveRDS(anno_gr38, file = 'hg38_epic_annotation.rds')
 ```
+
+# 2019-11-05 Update
+
+Noticed there are some NAs in the genes_symbol column
+
+```{r, eval = FALSE}
+anno <- readRDS(file = 'hg19_epic_annotation.rds')
+anno_gr38 <- readRDS(file = 'hg38_epic_annotation.rds')
+
+anno %>% 
+  mutate(genes_symbol = gsub(', NA', '', 
+                             gsub('NA ,', '', genes_symbol))) %>%
+  saveRDS(file = 'hg19_epic_annotation.rds')
+
+anno_gr38 %>% 
+  mutate(genes_symbol = gsub(', NA', '', 
+                             gsub('NA ,', '', genes_symbol))) %>%
+  saveRDS(file = 'hg19_epic_annotation.rds')
+```
+
 # Column descriptions
 
 ```{r}
