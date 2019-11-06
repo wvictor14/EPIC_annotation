@@ -25,7 +25,11 @@ library(fuzzyjoin)
 library(janitor)
 ```
 
-# 1. Illumina annotation
+# Initial creation
+
+This initial creation step starts with the Illumina annotations and adds some basic UCSC information on genes and other genomic features. Because this step is very time-consuming to run (~10 hours), I usually do my updates at the beginning of [step 3. *Add other annotations*](#3).
+ 
+## 1. Illumina annotation
 
 We start with the illumina provided locations of each probe. Note that Illumina has released multiple versions of the EPIC, each with a different set of probes (200-2000 probes can be different between arrays).
 
@@ -36,7 +40,7 @@ TODO: Add in b2 and b1 annotations to ensure all EPIC probes in the universe wil
 TODO: Add in 450k probes?
 TODO: Add in 27k probes?
 
-```{r}
+```{r eval = FALSE}
 b4 <- read_csv('Z:/Victor/Data/DNAm annotations/MethylationEPIC_v-1-0_B4.csv', skip = 7)
 b4_missing <- read_csv('Z:/Victor/Data/DNAm annotations/MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2) Annotations.csv')
 anno <- bind_rows(b4, b4_missing %>% mutate_at(c('AddressA_ID', 'AddressB_ID'), as.character))
@@ -58,7 +62,7 @@ anno <- anno %>% mutate(Strand = ifelse(Strand == 'F', '+', '-'),
   rename_at(vars(-(1:5)), ~paste0('ilmn_', .))
 ```
 
-# 2. Use annotatr to add UCSC annotations, and FANTOM5 enhancers
+## 2. Use annotatr to add UCSC annotations, and FANTOM5 enhancers
 
 The gather and spread functions take 10 hours to complete.
 
@@ -141,12 +145,15 @@ x1 == nrow(x) # must be T
 # now add back in the illumina columns
   
 ```
+
 saveRDS(x, '../../data/main/interim/annotation.rds')
 write_csv(x, '../../data/main/processed/annotation.csv')
 
-x <- readRDS('Z:/Victor/Projects/NIH - cells/data/main/interim/annotation.rds')
+## 3. Add other annotations {#3}
 
-# 3. Add other annotations
+```{r eval = TRUE}
+x <- readRDS('Z:/Victor/Projects/NIH - cells/data/main/interim/annotation.rds')
+```
 
 PMDs
 
@@ -237,7 +244,7 @@ anno <- anno %>%
   select(cpg:end, strand, cpg_id:genes_width, pmd_id:imprinted_dmr_placenta, contains('ilmn'))
 ```
 
-# 4. Map from hg19 to hg38
+## 4. Map from hg19 to hg38
 
 I provide a mapping from hg19 to hg38 coordinates. Note that this loses 247 cpgs.
 
@@ -264,21 +271,9 @@ anno_gr38 <- anno_gr38 %>% as_tibble %>%
 
 ```
 
-# Save data
-
-```{r eval = F}
-saveRDS(anno, file = 'hg19_epic_annotation.rds')
-saveRDS(anno_gr38, file = 'hg38_epic_annotation.rds')
-```
-
 # 2019-09-27 Update
 
 PMD coordinates were actually in hg18 coordinates. So here I convert them to hg19/gr38 before replacing into the annotations
-
-```{r}
-anno <- readRDS(file = 'hg19_epic_annotation.rds')
-anno_gr38 <- readRDS(file = 'hg38_epic_annotation.rds')
-```
 
 ## liftover
 
@@ -367,21 +362,11 @@ anno_gr38 <- anno_gr38 %>%
   dplyr::select(-contains('.y'))
 ```
 
-## Save data
-
-```{r eval = F}
-saveRDS(anno, file = 'hg19_epic_annotation.rds')
-saveRDS(anno_gr38, file = 'hg38_epic_annotation.rds')
-```
-
 # 2019-11-05 Update
 
-Noticed there are some NAs in the genes_symbol column
+Noticed there are some NAs in the genes_symbol column. I remove these in this update:
 
-```{r, eval = FALSE}
-anno <- readRDS(file = 'hg19_epic_annotation.rds')
-anno_gr38 <- readRDS(file = 'hg38_epic_annotation.rds')
-
+```{r}
 anno %>% 
   mutate(genes_symbol = gsub(', NA', '', 
                              gsub('NA ,', '', genes_symbol))) %>%
@@ -391,6 +376,13 @@ anno_gr38 %>%
   mutate(genes_symbol = gsub(', NA', '', 
                              gsub('NA ,', '', genes_symbol))) %>%
   saveRDS(file = 'hg19_epic_annotation.rds')
+```
+
+## Save data
+
+```{r eval = FALSE}
+saveRDS(anno, file = 'hg19_epic_annotation.rds')
+saveRDS(anno_gr38, file = 'hg38_epic_annotation.rds')
 ```
 
 # Column descriptions
