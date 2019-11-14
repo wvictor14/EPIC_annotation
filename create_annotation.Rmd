@@ -373,20 +373,27 @@ moved between genome builds). Also, some pmds share overlapping regions.
 # Merge overlapping regions
 
 ```{r}
-data %>% 
-  arrange(chrom, start) %>%
-  group_by(chrom) %>%
+pmds_hg19 <- pmds_hg19 %>% 
+  rename(chr = seqnames) %>%
+  arrange(chr, start) %>%
+  group_by(chr) %>%
   
-  mutate(previous_stop = cummax(lag(stop, default = 0)),
-         new_group = (start >= previous_stop),
+  # identify overlapping ranges
+  mutate(previous_end = cummax(lag(end, default = 0)), # get the previous row's end or the cummax
+         new_group = (start >= previous_end),
          group = cumsum(new_group))  %>%
   
-  group_by(chrom, group) %>%
+  # merge overlapping regions
+  group_by(chr, group) %>%
   summarize(start = min(start),
-            stop = max(stop),
-            name = paste(name, collapse = ","))
+            end = max(end)) %>%
+  
+  mutate(pmd_width = end-start,
+         pmd_id = paste0(chr, ':', start, '-', end))
 
 ```
+
+# Repeat for gr38
 
 ```{r}
 # hg18 to gr38
@@ -410,41 +417,38 @@ pmds_gr38 %>%
   check_other_chr # many do map to different chromosomes now
 
 pmds_gr38 <- pmds_gr38 %>%
+  
+  # keep only those pieces that match the original chromosome
   left_join(pmds %>% select(chr, ID), by = 'ID') %>%
-  filter(seqnames == chr) %>% # keep only those pieces that match the original chromosome
-  select(-chr, ID, everything())
-
-pmds_gr38 %>%
-  check_other_chr
+  filter(seqnames == chr) %>%
+  select(-chr, ID, everything()) %>%
+  rename(chr = seqnames) %>%
+  arrange(chr, start) %>%
+  group_by(chr) %>%
+  
+  # merge overlapping regions
+  mutate(previous_end = cummax(lag(end, default = 0)), # get the previous row's end or the cummax
+         new_group = (start >= previous_end),
+         group = cumsum(new_group))  %>%
+  group_by(chr, group) %>%
+  summarize(start = min(start),
+            end = max(end)) %>%
+  
+  mutate(pmd_width = end-start,
+         pmd_id = paste0(chr, ':', start, '-', end))
 ```
 
 ## Add to annotation
 
 ```{r}
 #hg19
-pmds_hg19 <- pmds_hg19 %>%
-  as_tibble() %>% 
-  rename(chr = seqnames,
-         pmd_width = width) %>%
-  mutate(pmd_id = paste0(chr, ':', start, '-', end)) %>%
-  dplyr::select(-ID)
-
-anno_x <- anno %>%
+anno <- anno %>%
   dplyr::select(-pmd_id, -pmd_width) %>%
   genome_left_join(pmds_hg19, by = c('chr', 'start', 'end')) %>%
   rename(chr = chr.x, start = start.x, end = end.x) %>%
   dplyr::select(-contains('.y'))
 
-
-# gr38
-pmds_gr38 <- pmds_gr38 %>%
-  as_tibble() %>% 
-  rename(chr = seqnames,
-         pmd_width = width) %>%
-  mutate(pmd_id = paste0(chr, ':', start, '-', end)) %>%
-  dplyr::select(-ID)
-
-anno_gr38_x <- anno_gr38 %>%
+anno_gr38 <- anno_gr38 %>%
   dplyr::select(-pmd_id, -pmd_width) %>%
   genome_left_join(pmds_gr38, by = c('chr', 'start', 'end')) %>%
   rename(chr = chr.x, start = start.x, end = end.x) %>%
@@ -463,6 +467,19 @@ anno <- anno %>%
 anno_gr38 <- anno_gr38 %>% 
   mutate(genes_symbol = gsub(', NA', '', 
                              gsub('NA ,', '', genes_symbol)))
+```
+
+# Checks
+
+```{r}
+# Is there one row per cpg?
+anno %>%
+  group_by(cpg) %>%
+  filter(n() > 1)
+
+anno_gr38 %>%
+  group_by(cpg) %>%
+  filter(n() > 1)
 ```
 
 ## Save data
