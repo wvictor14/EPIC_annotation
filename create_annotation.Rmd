@@ -23,6 +23,7 @@ library(tidyverse)
 library(readxl)
 library(fuzzyjoin)
 library(janitor)
+theme_set(theme_bw())
 ```
 
 # Initial creation
@@ -72,7 +73,7 @@ Except for Start, End, chr and cpg_id columns, I rename others with the prefix '
 they are from the illumina annotation file. People can refer to the illumina files for description 
 of those variables
 
-```{r}
+```{r, eval = FALSE}
 # coerce to granges
 anno_GR <- makeGRangesFromDataFrame(anno, keep.extra.columns = T)
 
@@ -241,14 +242,14 @@ anno <- anno %>%
   
   # rearrange columns
   clean_names %>%
-  select(cpg:end, strand, cpg_id:genes_width, pmd_id:imprinted_dmr_placenta, contains('ilmn'))
+  select(cpg:end, cpg_id:genes_width, pmd_id:imprinted_dmr_placenta, contains('ilmn'))
 ```
 
 ## 4. Map from hg19 to hg38
 
 I provide a mapping from hg19 to hg38 coordinates. Note that this loses 247 cpgs.
 
-```{r eval = T}
+```{r eval = TRUE}
 # load chain file
 chain <- import.chain("hg19ToHg38.over.chain")
 chain
@@ -278,11 +279,10 @@ PMD coordinates were actually in hg18 coordinates. So here I convert them to hg1
 ## liftover
 
 ```{r}
-pmds <- read_xls('Z:/Victor/Projects/NIH - cells/data/external/placental_pmds.xls', col_names = F)
-colnames(pmds) <- c('chr', 'start', 'end')
-
-# make an identifier for original pmds
-pmds <- pmds %>% 
+pmds <- read_xls('Z:/Victor/Projects/NIH - cells/data/external/placental_pmds.xls', 
+                 col_names =  c('chr', 'start', 'end')) %>%
+  
+  # make an identifier for original pmds
   mutate(width = end-start,
          ID = paste0('pmd_', 1:n()))
 
@@ -290,23 +290,74 @@ pmds <- pmds %>%
 chain_hg18_hg19 <- import.chain("hg18ToHg19.over.chain")
 chain_hg18_hg19
 
-
-# coerce to granges object
-pmds_hg18 <- pmds %>%
-  makeGRangesFromDataFrame(keep.extra.columns = T)
-
 # hg18 to hg19 coordinates
-pmds_hg19 <- liftOver(pmds_hg18, chain_hg18_hg19) %>% unlist
+pmds_hg19 <- pmds %>%
+  makeGRangesFromDataFrame(keep.extra.columns = T) %>%
+  liftOver(chain_hg18_hg19) %>%
+  unlist() %>%
+  as_tibble() %>%
+  select(-strand)
 
-length(pmds_hg19) - length(pmds_hg18) # gains 4681 ranges
-setdiff(pmds_hg18$ID, pmds_hg19$ID) # lost 1 pmd
-
+nrow(pmds_hg19) - nrow(pmds) # gains 4681 ranges
+setdiff(pmds$ID, pmds_hg19$ID) # lost 1 pmd
 
 pmds_hg19 %>%
   as_tibble() %>%
   group_by(ID) %>%
-  filter(n() > 1) %>%
-  left_join(pmds, by = 'ID')
+  left_join(pmds, by = 'ID') %>%
+  pivot_longer(cols = contains('width'),
+               names_to = 'which',
+               values_to = 'width') %>%
+  ggplot() +
+  geom_histogram(aes(x = width), binwidth = 1000) +
+  scale_x_continuous(limits = c(0, 100000)) +
+  scale_y_continuous(limits = c(0,1000)) +
+  facet_wrap(~which) +
+  labs(title = 'hg19 (left) versus hg18 (right) distribution', 
+       subtitle = 'PMDs are broken up into smaller pieces when remapping')
+```
+
+These are the pmds that had some pieces broken up and some pieces mapped to more than one chromosome:
+
+```{r}
+check_other_chr <- function(x){
+  x %>%
+      
+    # add in original hg18 coordinates
+    left_join(pmds, by = 'ID') %>%
+    select(ID, everything()) %>%
+    
+    # filter out those pmds pieces that were mapped to chromosomes that are not the original
+    group_by(ID) %>%
+    filter(n() > 1) %>% # pieces greater than 1
+    summarize(n_chr = length(unique(seqnames)),
+              chr_18 = first(chr),
+              chr_new = paste0(unique(seqnames), collapse = ', ')) %>%
+    filter(n_chr > 1) # pieces mapping to different chromosomes > 1; 15!
+}
+
+pmds_hg19 %>%
+  check_other_chr
+
+pmds_hg19 %>%
+  check_other_chr %>%
+  pull(n_chr) %>%
+  sum #15 pieces map to other chromosomes
+```
+
+## Remove pieces that map to other chromosomes
+
+The startegy is to remove these pieces
+
+```{r}
+pmds_hg19 <- pmds_hg19 %>%
+  left_join(pmds %>% select(chr, ID), by = 'ID') %>%
+  filter(seqnames == chr) %>% # keep only those pieces that match the original chromosome
+  select(-chr, ID, everything())
+
+# check that there are no more pieces mapping to other chromosomes
+pmds_hg19 %>%
+  check_other_chr
 ```
 
 Note that by lifting over, many of the pmds have been "broken" up. It seems that in hg19 many sequences were added into the genome. So a pmd is broken up when there is a new sequence added somewhere into the middle of it.
@@ -316,6 +367,27 @@ Or should I say take the boundary for each original pmd in it's new coordinates,
 
 For now, I leave the remapped pmds as is.
 
+Now, I've realized that some pmds have mapped to multiple chromosomes (because some sequences have been 
+moved between genome builds). Also, some pmds share overlapping regions. 
+
+# Merge overlapping regions
+
+```{r}
+data %>% 
+  arrange(chrom, start) %>%
+  group_by(chrom) %>%
+  
+  mutate(previous_stop = cummax(lag(stop, default = 0)),
+         new_group = (start >= previous_stop),
+         group = cumsum(new_group))  %>%
+  
+  group_by(chrom, group) %>%
+  summarize(start = min(start),
+            stop = max(stop),
+            name = paste(name, collapse = ","))
+
+```
+
 ```{r}
 # hg18 to gr38
 
@@ -323,10 +395,27 @@ For now, I leave the remapped pmds as is.
 chain_hg18_gr38 <- import.chain("hg18ToHg38.over.chain")
 chain_hg18_gr38
 
-pmds_gr38 <- liftOver(pmds_hg18, chain_hg18_gr38) %>% unlist
+pmds_gr38 <- pmds %>%
+  makeGRangesFromDataFrame(keep.extra.columns = T) %>%
+  liftOver(chain_hg18_gr38) %>% 
+  unlist() %>%
+  as_tibble() %>%
+  select(-strand)
 
-length(pmds_gr38) - length(pmds_hg18) # gains 43355 ranges
-setdiff(pmds_hg18$ID, pmds_gr38$ID) # lost 6 pmds
+nrow(pmds_gr38) - nrow(pmds) # gains 43355 ranges
+setdiff(pmds$ID, pmds_gr38$ID) # lost 6 pmds
+
+# check that pmds map to the same original chromosomes
+pmds_gr38 %>%
+  check_other_chr # many do map to different chromosomes now
+
+pmds_gr38 <- pmds_gr38 %>%
+  left_join(pmds %>% select(chr, ID), by = 'ID') %>%
+  filter(seqnames == chr) %>% # keep only those pieces that match the original chromosome
+  select(-chr, ID, everything())
+
+pmds_gr38 %>%
+  check_other_chr
 ```
 
 ## Add to annotation
@@ -338,9 +427,9 @@ pmds_hg19 <- pmds_hg19 %>%
   rename(chr = seqnames,
          pmd_width = width) %>%
   mutate(pmd_id = paste0(chr, ':', start, '-', end)) %>%
-  dplyr::select(-ID, -strand)
+  dplyr::select(-ID)
 
-anno <- anno %>%
+anno_x <- anno %>%
   dplyr::select(-pmd_id, -pmd_width) %>%
   genome_left_join(pmds_hg19, by = c('chr', 'start', 'end')) %>%
   rename(chr = chr.x, start = start.x, end = end.x) %>%
@@ -353,9 +442,9 @@ pmds_gr38 <- pmds_gr38 %>%
   rename(chr = seqnames,
          pmd_width = width) %>%
   mutate(pmd_id = paste0(chr, ':', start, '-', end)) %>%
-  dplyr::select(-ID, -strand)
+  dplyr::select(-ID)
 
-anno_gr38 <- anno_gr38 %>%
+anno_gr38_x <- anno_gr38 %>%
   dplyr::select(-pmd_id, -pmd_width) %>%
   genome_left_join(pmds_gr38, by = c('chr', 'start', 'end')) %>%
   rename(chr = chr.x, start = start.x, end = end.x) %>%
@@ -366,16 +455,14 @@ anno_gr38 <- anno_gr38 %>%
 
 Noticed there are some NAs in the genes_symbol column. I remove these in this update:
 
-```{r}
-anno %>% 
+```{r eval = TRUE}
+anno <- anno %>% 
   mutate(genes_symbol = gsub(', NA', '', 
-                             gsub('NA ,', '', genes_symbol))) %>%
-  saveRDS(file = 'hg19_epic_annotation.rds')
+                             gsub('NA ,', '', genes_symbol)))
 
-anno_gr38 %>% 
+anno_gr38 <- anno_gr38 %>% 
   mutate(genes_symbol = gsub(', NA', '', 
-                             gsub('NA ,', '', genes_symbol))) %>%
-  saveRDS(file = 'hg19_epic_annotation.rds')
+                             gsub('NA ,', '', genes_symbol)))
 ```
 
 ## Save data
