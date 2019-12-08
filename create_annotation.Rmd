@@ -16,13 +16,14 @@ Outline
 
 # Libraries 
 
-```{r}
+```{r message = FALSE, warning = FALSE}
 library(rtracklayer) 
 library(annotatr)
-library(tidyverse)
 library(readxl)
 library(fuzzyjoin)
 library(janitor)
+library(AnnotationHub)
+library(tidyverse)
 theme_set(theme_bw())
 ```
 
@@ -65,6 +66,7 @@ anno <- anno %>% mutate(Strand = ifelse(Strand == 'F', '+', '-'),
 
 ## 2. Use annotatr to add UCSC annotations, and FANTOM5 enhancers
 
+
 The gather and spread functions take 10 hours to complete.
 
 First I filter to the illumina information to keep. 
@@ -97,14 +99,26 @@ annotated <- annotate_regions(regions = anno_GR, annotations = annots, ignore.st
 # clean it up
 annotated
 x1 <- length(unique(annotated$cpg_id))
+x1 # 8866836 cpgs
 
 system.time(
 x <- annotated %>% 
   
   # 1. remove identifiers from annot.id, i.e "intron.9999" should be just called "intron"
   mutate(annot.id = str_extract(annot.id, '^[A-z0-9]+'),
-         annot.type = str_extract(annot.type, '(?<=hg19_)[^_]+')
-         ) %>%
+         annot.type = str_extract(annot.type, '(?<=hg19_)[^_]+'),
+         
+         # Some transcripts are not associated with any gene symbol / entrez id
+         # Because we are summarize all transcripts and all gene symbols into one line
+         # If there is an NA in gene symbol then it will get skipped, 
+         # so we will have n transcripts, and n-1 gene symbols
+         # we need to replace thse withe something so we have n transcripts and n gene symbols
+         annot.gene_id = if_else(!is.na(annot.tx_id) & is.na(annot.gene_id),
+                                 'no_associated_gene', 
+                                 annot.gene_id),
+         annot.symbol = if_else(!is.na(annot.tx_id) & is.na(annot.symbol),
+                                 'no_associated_gene', 
+                                 annot.symbol)) %>%
   dplyr::select(-annot.seqnames, -annot.start, -annot.end, -annot.strand) %>%
   
   # 2. paste together all elements, grouped by cpg-related and gene-related elements
@@ -147,13 +161,13 @@ x1 == nrow(x) # must be T
   
 ```
 
-saveRDS(x, '../../data/main/interim/annotation.rds')
+saveRDS(x, here::here('annotation.rds'))
 write_csv(x, '../../data/main/processed/annotation.csv')
 
 ## 3. Add other annotations {#3}
 
 ```{r eval = TRUE}
-x <- readRDS('Z:/Victor/Projects/NIH - cells/data/main/interim/annotation.rds')
+x <- readRDS('annotation.rds')
 ```
 
 PMDs
@@ -236,6 +250,7 @@ imprint_dmr <- imprint %>%
   select(-placenta_specific)
   
 anno <- anno %>% 
+  select(-imprinted_gene_placenta, -imprinted_gene_general) %>%
   genome_left_join(imprint_dmr) %>%
   dplyr::rename(chr = chr.x, start = start.x, end = end.x) %>%
   select(-contains('.y')) %>%
@@ -455,18 +470,20 @@ anno_gr38 <- anno_gr38 %>%
   dplyr::select(-contains('.y'))
 ```
 
-# 2019-11-05 Update
+# Remove NAs in genes_ columns
 
-Noticed there are some NAs in the genes_symbol column. I remove these in this update:
+There are some NAs in the `genes_symbol`, `genes_tx_id`, and `genes_gene_id` columns. I remove these in this section.
 
 ```{r eval = TRUE}
 anno <- anno %>% 
-  mutate(genes_symbol = gsub(', NA', '', 
-                             gsub('NA ,', '', genes_symbol)))
+  mutate(genes_symbol = gsub(', \\bNA\\b', '', genes_symbol),
+         genes_tx_id = gsub(', \\bNA\\b', '', genes_tx_id),
+         genes_gene_id = gsub(', \\bNA\\b', '', genes_gene_id))
 
 anno_gr38 <- anno_gr38 %>% 
-  mutate(genes_symbol = gsub(', NA', '', 
-                             gsub('NA ,', '', genes_symbol)))
+  mutate(genes_symbol = gsub(', \\bNA\\b', '', genes_symbol),
+         genes_tx_id = gsub(', \\bNA\\b', '', genes_tx_id),
+         genes_gene_id = gsub(', \\bNA\\b', '', genes_gene_id))
 ```
 
 # Checks
@@ -494,24 +511,29 @@ saveRDS(anno_gr38, file = 'hg38_epic_annotation.rds')
 ```{r}
 ## column descriptors
 colnames(x)
-# cpg: cpg identifier
-# chr: chromosome position
-# start, end: cpg position in bp 
-# cpg_id: relation to cpg island features. uses UCSC cpg islands as reference, then definitions for shelves, shores, and seas are used
-# cpg_width: width in bp of the cpg island -related feature
-# enhancers_id: fantom5 enhancer
-# enhancers_width: width in bp of the fantom5 enhancer
-# genes_: columns are retrieved from txdb.hsapiens.ucsc.hg19.knowngene
-# genes_gene_id: I'm not sure what this is TBH
-# genes_id: gene-related elemtn, e.g. promoters, introns/exons, based off of UCSC
-# genes_symbol: Gene symbol
-# genes_tx_id: transcript identifier
-# genes_width: width in bp of gene element
-# pmd_id, pmd_width: indicates which pmd a given cpg lies in. list taken from d.i.schoreder et al. 2013
-# imprinted_gene_: indicates the imprinted gene a given cpg lies in, placental or non-tissue specific
-# imprinted_dmr_: indicates the imprinted dmr a given cpg lies in, placental or non-tissue specific
-# imprinting regions/genes combined from several databases and primary articles, process by GDG.
-# columns prefixed by 'ilmn_' come from the illumina provided annotation files
 ```
+
+|column names|description|
+|:---|:---|:---|
+|cpg| cpg identifier|
+|chr|chromosome position|
+|start, end|cpg position in bp| 
+|cpg_id|relation to cpg island features. uses UCSC cpg islands as reference, then definitions for shelves, shores, and seas are used|
+|cpg_width|width in bp of the cpg island -related feature|
+|enhancers_id|fantom5 enhancer|
+|enhancers_width|width in bp of the fantom5 enhancer|
+|genes_| columns are retrieved from txdb.hsapiens.ucsc.hg19.knowngene|
+|genes_gene_id|Entrez ID|
+|genes_id|gene-related elemtn, e.g. promoters, introns/exons, based off of UCSC|
+|genes_symbol| Gene symbol.|
+|genes_tx_id| transcript identifier|
+|genes_width| width in bp of gene element|
+|pmd_id, pmd_width| indicates which pmd a given cpg lies in. list taken from d.i.schoreder et al. 2013|
+|imprinted_gene_| indicates the imprinted gene a given cpg lies in, placental or non-tissue specific|
+|imprinted_dmr_| indicates the imprinted dmr a given cpg lies in, placental or non-tissue specific|
+| | |
+|imprinting regions/genes combined from several databases and primary articles, process by GDG.| |
+|columns prefixed by 'ilmn_' come from the illumina provided annotation files| |
+
 
 

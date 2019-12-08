@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html>
 
 <head>
 
 <meta charset="utf-8" />
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
 <meta name="author" content="Victor Yuan" />
@@ -270,7 +270,6 @@ code {
 }
 img {
   max-width:100%;
-  height: auto;
 }
 .tabbed-pane {
   padding-top: 12px;
@@ -332,6 +331,7 @@ summary {
   border: none;
   display: inline-block;
   border-radius: 4px;
+  background-color: transparent;
 }
 
 .tabset-dropdown > .nav-tabs.nav-tabs-open > li {
@@ -343,18 +343,6 @@ summary {
   display: none;
 }
 </style>
-
-<script>
-$(document).ready(function () {
-  window.buildTabsets("TOC");
-});
-
-$(document).ready(function () {
-  $('.tabset-dropdown > .nav-tabs > li').click(function () {
-    $(this).parent().toggleClass('nav-tabs-open')
-  });
-});
-</script>
 
 <!-- code folding -->
 
@@ -391,75 +379,14 @@ $(document).ready(function () {
 </ol>
 <div id="libraries" class="section level1">
 <h1>Libraries</h1>
-<pre class="r"><code>library(rtracklayer) </code></pre>
-<pre><code>## Loading required package: GenomicRanges</code></pre>
-<pre><code>## Loading required package: stats4</code></pre>
-<pre><code>## Loading required package: BiocGenerics</code></pre>
-<pre><code>## Loading required package: parallel</code></pre>
-<pre><code>## 
-## Attaching package: &#39;BiocGenerics&#39;</code></pre>
-<pre><code>## The following objects are masked from &#39;package:parallel&#39;:
-## 
-##     clusterApply, clusterApplyLB, clusterCall, clusterEvalQ,
-##     clusterExport, clusterMap, parApply, parCapply, parLapply,
-##     parLapplyLB, parRapply, parSapply, parSapplyLB</code></pre>
-<pre><code>## The following objects are masked from &#39;package:stats&#39;:
-## 
-##     IQR, mad, sd, var, xtabs</code></pre>
-<pre><code>## The following objects are masked from &#39;package:base&#39;:
-## 
-##     anyDuplicated, append, as.data.frame, basename, cbind,
-##     colnames, dirname, do.call, duplicated, eval, evalq, Filter,
-##     Find, get, grep, grepl, intersect, is.unsorted, lapply, Map,
-##     mapply, match, mget, order, paste, pmax, pmax.int, pmin,
-##     pmin.int, Position, rank, rbind, Reduce, rownames, sapply,
-##     setdiff, sort, table, tapply, union, unique, unsplit, which,
-##     which.max, which.min</code></pre>
-<pre><code>## Loading required package: S4Vectors</code></pre>
-<pre><code>## 
-## Attaching package: &#39;S4Vectors&#39;</code></pre>
-<pre><code>## The following object is masked from &#39;package:base&#39;:
-## 
-##     expand.grid</code></pre>
-<pre><code>## Loading required package: IRanges</code></pre>
-<pre><code>## 
-## Attaching package: &#39;IRanges&#39;</code></pre>
-<pre><code>## The following object is masked from &#39;package:grDevices&#39;:
-## 
-##     windows</code></pre>
-<pre><code>## Loading required package: GenomeInfoDb</code></pre>
-<pre class="r"><code>library(annotatr)
-library(tidyverse)</code></pre>
-<pre><code>## -- Attaching packages ---------------------------------------- tidyverse 1.2.1 --</code></pre>
-<pre><code>## v ggplot2 3.2.0     v purrr   0.3.2
-## v tibble  2.1.3     v dplyr   0.8.3
-## v tidyr   1.0.0     v stringr 1.4.0
-## v readr   1.3.1     v forcats 0.4.0</code></pre>
-<pre><code>## Warning: package &#39;tibble&#39; was built under R version 3.6.1</code></pre>
-<pre><code>## Warning: package &#39;tidyr&#39; was built under R version 3.6.1</code></pre>
-<pre><code>## Warning: package &#39;dplyr&#39; was built under R version 3.6.1</code></pre>
-<pre><code>## -- Conflicts ------------------------------------------- tidyverse_conflicts() --
-## x dplyr::collapse()   masks IRanges::collapse()
-## x dplyr::combine()    masks BiocGenerics::combine()
-## x dplyr::desc()       masks IRanges::desc()
-## x tidyr::expand()     masks S4Vectors::expand()
-## x dplyr::filter()     masks stats::filter()
-## x dplyr::first()      masks S4Vectors::first()
-## x dplyr::lag()        masks stats::lag()
-## x ggplot2::Position() masks BiocGenerics::Position(), base::Position()
-## x purrr::reduce()     masks GenomicRanges::reduce(), IRanges::reduce()
-## x dplyr::rename()     masks S4Vectors::rename()
-## x dplyr::slice()      masks IRanges::slice()</code></pre>
-<pre class="r"><code>library(readxl)
+<pre class="r"><code>library(rtracklayer) 
+library(annotatr)
+library(readxl)
 library(fuzzyjoin)
-library(janitor)</code></pre>
-<pre><code>## Warning: package &#39;janitor&#39; was built under R version 3.6.1</code></pre>
-<pre><code>## 
-## Attaching package: &#39;janitor&#39;</code></pre>
-<pre><code>## The following objects are masked from &#39;package:stats&#39;:
-## 
-##     chisq.test, fisher.test</code></pre>
-<pre class="r"><code>theme_set(theme_bw())</code></pre>
+library(janitor)
+library(AnnotationHub)
+library(tidyverse)
+theme_set(theme_bw())</code></pre>
 </div>
 <div id="initial-creation" class="section level1">
 <h1>Initial creation</h1>
@@ -517,14 +444,26 @@ annotated &lt;- annotate_regions(regions = anno_GR, annotations = annots, ignore
 # clean it up
 annotated
 x1 &lt;- length(unique(annotated$cpg_id))
+x1 # 8866836 cpgs
 
 system.time(
 x &lt;- annotated %&gt;% 
   
   # 1. remove identifiers from annot.id, i.e &quot;intron.9999&quot; should be just called &quot;intron&quot;
   mutate(annot.id = str_extract(annot.id, &#39;^[A-z0-9]+&#39;),
-         annot.type = str_extract(annot.type, &#39;(?&lt;=hg19_)[^_]+&#39;)
-         ) %&gt;%
+         annot.type = str_extract(annot.type, &#39;(?&lt;=hg19_)[^_]+&#39;),
+         
+         # Some transcripts are not associated with any gene symbol / entrez id
+         # Because we are summarize all transcripts and all gene symbols into one line
+         # If there is an NA in gene symbol then it will get skipped, 
+         # so we will have n transcripts, and n-1 gene symbols
+         # we need to replace thse withe something so we have n transcripts and n gene symbols
+         annot.gene_id = if_else(!is.na(annot.tx_id) &amp; is.na(annot.gene_id),
+                                 &#39;no_associated_gene&#39;, 
+                                 annot.gene_id),
+         annot.symbol = if_else(!is.na(annot.tx_id) &amp; is.na(annot.symbol),
+                                 &#39;no_associated_gene&#39;, 
+                                 annot.symbol)) %&gt;%
   dplyr::select(-annot.seqnames, -annot.start, -annot.end, -annot.strand) %&gt;%
   
   # 2. paste together all elements, grouped by cpg-related and gene-related elements
@@ -564,11 +503,11 @@ x &lt;- annotated %&gt;%
 x1 == nrow(x) # must be T 
 
 # now add back in the illumina columns</code></pre>
-<p>saveRDS(x, ‘../../data/main/interim/annotation.rds’) write_csv(x, ‘../../data/main/processed/annotation.csv’)</p>
+<p>saveRDS(x, here::here(‘annotation.rds’)) write_csv(x, ‘../../data/main/processed/annotation.csv’)</p>
 </div>
 <div id="add-other-annotations-3" class="section level2">
 <h2>3. Add other annotations {#3}</h2>
-<pre class="r"><code>x &lt;- readRDS(&#39;Z:/Victor/Projects/NIH - cells/data/main/interim/annotation.rds&#39;)</code></pre>
+<pre class="r"><code>x &lt;- readRDS(&#39;annotation.rds&#39;)</code></pre>
 <p>PMDs</p>
 <p><a href="https://www.pnas.org/content/110/15/6037" class="uri">https://www.pnas.org/content/110/15/6037</a></p>
 <p>Schroeder DI, Blair JD, Lott P, Yu HOK, Hong D, Crary F, et al. The human placenta methylome. PNAS. 2013 Apr 9;110(15):6037–42.</p>
@@ -644,6 +583,7 @@ imprint_dmr &lt;- imprint %&gt;%
   select(-placenta_specific)
   
 anno &lt;- anno %&gt;% 
+  select(-imprinted_gene_placenta, -imprinted_gene_general) %&gt;%
   genome_left_join(imprint_dmr) %&gt;%
   dplyr::rename(chr = chr.x, start = start.x, end = end.x) %&gt;%
   select(-contains(&#39;.y&#39;)) %&gt;%
@@ -660,7 +600,7 @@ anno &lt;- anno %&gt;%
 chain &lt;- import.chain(&quot;hg19ToHg38.over.chain&quot;)
 chain</code></pre>
 <pre><code>## Chain of length 25
-## names(25): chr22 chr21 chr19 chr20 chr18 chrY ... chr5 chr4 chr3 chr2 chr1</code></pre>
+## names(25): chr22 chr21 chr19 chr20 chr18 chrY ... chr6 chr5 chr4 chr3 chr2 chr1</code></pre>
 <pre class="r"><code># coerce to granges object
 anno_gr38 &lt;- anno %&gt;%
   makeGRangesFromDataFrame(keep.extra.columns = T)
@@ -756,7 +696,7 @@ anno_gr38 &lt;- anno_gr38 %&gt;% as_tibble %&gt;%
 chain_hg18_hg19 &lt;- import.chain(&quot;hg18ToHg19.over.chain&quot;)
 chain_hg18_hg19</code></pre>
 <pre><code>## Chain of length 25
-## names(25): chr22 chr21 chr19 chr20 chr18 chrY ... chr5 chr4 chr3 chr2 chr1</code></pre>
+## names(25): chr22 chr21 chr19 chr20 chr18 chrY ... chr6 chr5 chr4 chr3 chr2 chr1</code></pre>
 <pre class="r"><code># hg18 to hg19 coordinates
 pmds_hg19 &lt;- pmds %&gt;%
   makeGRangesFromDataFrame(keep.extra.columns = T) %&gt;%
@@ -876,7 +816,7 @@ pmds_hg19 %&gt;%
 chain_hg18_gr38 &lt;- import.chain(&quot;hg18ToHg38.over.chain&quot;)
 chain_hg18_gr38</code></pre>
 <pre><code>## Chain of length 25
-## names(25): chr22 chr21 chr19 chr20 chr18 chrY ... chr5 chr4 chr3 chr2 chr1</code></pre>
+## names(25): chr22 chr21 chr19 chr20 chr18 chrY ... chr6 chr5 chr4 chr3 chr2 chr1</code></pre>
 <pre class="r"><code>pmds_gr38 &lt;- pmds %&gt;%
   makeGRangesFromDataFrame(keep.extra.columns = T) %&gt;%
   liftOver(chain_hg18_gr38) %&gt;% 
@@ -892,18 +832,18 @@ nrow(pmds_gr38) - nrow(pmds) # gains 43355 ranges</code></pre>
 pmds_gr38 %&gt;%
   check_other_chr # many do map to different chromosomes now</code></pre>
 <pre><code>## # A tibble: 56 x 4
-##    ID       n_chr chr_18 chr_new                                           
-##    &lt;chr&gt;    &lt;int&gt; &lt;chr&gt;  &lt;chr&gt;                                             
-##  1 pmd_1157     3 chr11  chr11, chr2, chr20                                
-##  2 pmd_1319     4 chr11  chr11, chr5, chr1, chrX                           
-##  3 pmd_1320    10 chr12  chr12, chr15, chr10, chr20, chr4, chr3, chr13, ch~
-##  4 pmd_139      3 chr1   chr1, chr3, chr5                                  
-##  5 pmd_140      2 chr1   chr1, chr20                                       
-##  6 pmd_1918     2 chr14  chr14, chr11                                      
-##  7 pmd_2109    16 chr14  chr14, chr5, chr9, chr2, chr15, chrX, chr3, chr16~
-##  8 pmd_2262     2 chr15  chr15, chrY                                       
-##  9 pmd_2543     2 chr16  chr16, chr22                                      
-## 10 pmd_2801     2 chr17  chr17, chr18                                      
+##    ID       n_chr chr_18 chr_new                                                
+##    &lt;chr&gt;    &lt;int&gt; &lt;chr&gt;  &lt;chr&gt;                                                  
+##  1 pmd_1157     3 chr11  chr11, chr2, chr20                                     
+##  2 pmd_1319     4 chr11  chr11, chr5, chr1, chrX                                
+##  3 pmd_1320    10 chr12  chr12, chr15, chr10, chr20, chr4, chr3, chr13, chr11, ~
+##  4 pmd_139      3 chr1   chr1, chr3, chr5                                       
+##  5 pmd_140      2 chr1   chr1, chr20                                            
+##  6 pmd_1918     2 chr14  chr14, chr11                                           
+##  7 pmd_2109    16 chr14  chr14, chr5, chr9, chr2, chr15, chrX, chr3, chr16, chr~
+##  8 pmd_2262     2 chr15  chr15, chrY                                            
+##  9 pmd_2543     2 chr16  chr16, chr22                                           
+## 10 pmd_2801     2 chr17  chr17, chr18                                           
 ## # ... with 46 more rows</code></pre>
 <pre class="r"><code>pmds_gr38 &lt;- pmds_gr38 %&gt;%
   
@@ -949,16 +889,18 @@ anno &lt;- anno %&gt;%
 ## `forcats::fct_explicit_na`</code></pre>
 </div>
 </div>
-<div id="update-1" class="section level1">
-<h1>2019-11-05 Update</h1>
-<p>Noticed there are some NAs in the genes_symbol column. I remove these in this update:</p>
+<div id="remove-nas-in-genes_-columns" class="section level1">
+<h1>Remove NAs in genes_ columns</h1>
+<p>There are some NAs in the <code>genes_symbol</code>, <code>genes_tx_id</code>, and <code>genes_gene_id</code> columns. I remove these in this section.</p>
 <pre class="r"><code>anno &lt;- anno %&gt;% 
-  mutate(genes_symbol = gsub(&#39;, NA&#39;, &#39;&#39;, 
-                             gsub(&#39;NA ,&#39;, &#39;&#39;, genes_symbol)))
+  mutate(genes_symbol = gsub(&#39;, \\bNA\\b&#39;, &#39;&#39;, genes_symbol),
+         genes_tx_id = gsub(&#39;, \\bNA\\b&#39;, &#39;&#39;, genes_tx_id),
+         genes_gene_id = gsub(&#39;, \\bNA\\b&#39;, &#39;&#39;, genes_gene_id))
 
 anno_gr38 &lt;- anno_gr38 %&gt;% 
-  mutate(genes_symbol = gsub(&#39;, NA&#39;, &#39;&#39;, 
-                             gsub(&#39;NA ,&#39;, &#39;&#39;, genes_symbol)))</code></pre>
+  mutate(genes_symbol = gsub(&#39;, \\bNA\\b&#39;, &#39;&#39;, genes_symbol),
+         genes_tx_id = gsub(&#39;, \\bNA\\b&#39;, &#39;&#39;, genes_tx_id),
+         genes_gene_id = gsub(&#39;, \\bNA\\b&#39;, &#39;&#39;, genes_gene_id))</code></pre>
 </div>
 <div id="checks" class="section level1">
 <h1>Checks</h1>
@@ -966,28 +908,24 @@ anno_gr38 &lt;- anno_gr38 %&gt;%
 anno %&gt;%
   group_by(cpg) %&gt;%
   filter(n() &gt; 1)</code></pre>
-<pre><code>## # A tibble: 0 x 20
+<pre><code>## # A tibble: 0 x 18
 ## # Groups:   cpg [0]
-## # ... with 20 variables: cpg &lt;chr&gt;, chr &lt;chr&gt;, start &lt;dbl&gt;, end &lt;dbl&gt;,
-## #   cpg_id &lt;chr&gt;, cpg_width &lt;chr&gt;, enhancers_id &lt;chr&gt;,
-## #   enhancers_width &lt;chr&gt;, genes_gene_id &lt;chr&gt;, genes_id &lt;chr&gt;,
-## #   genes_symbol &lt;chr&gt;, genes_tx_id &lt;chr&gt;, genes_width &lt;chr&gt;,
-## #   imprinted_gene_placenta &lt;chr&gt;, imprinted_gene_general &lt;chr&gt;,
-## #   imprinted_dmr_general &lt;chr&gt;, imprinted_dmr_placenta &lt;chr&gt;,
-## #   group &lt;int&gt;, pmd_width &lt;int&gt;, pmd_id &lt;chr&gt;</code></pre>
+## # ... with 18 variables: cpg &lt;chr&gt;, chr &lt;chr&gt;, start &lt;dbl&gt;, end &lt;dbl&gt;,
+## #   cpg_id &lt;chr&gt;, cpg_width &lt;chr&gt;, enhancers_id &lt;chr&gt;, enhancers_width &lt;chr&gt;,
+## #   genes_gene_id &lt;chr&gt;, genes_id &lt;chr&gt;, genes_symbol &lt;chr&gt;, genes_tx_id &lt;chr&gt;,
+## #   genes_width &lt;chr&gt;, imprinted_dmr_general &lt;chr&gt;,
+## #   imprinted_dmr_placenta &lt;chr&gt;, group &lt;int&gt;, pmd_width &lt;int&gt;, pmd_id &lt;chr&gt;</code></pre>
 <pre class="r"><code>anno_gr38 %&gt;%
   group_by(cpg) %&gt;%
   filter(n() &gt; 1)</code></pre>
-<pre><code>## # A tibble: 0 x 22
+<pre><code>## # A tibble: 0 x 20
 ## # Groups:   cpg [0]
-## # ... with 22 variables: cpg &lt;chr&gt;, chr &lt;fct&gt;, start &lt;int&gt;, end &lt;int&gt;,
+## # ... with 20 variables: cpg &lt;chr&gt;, chr &lt;fct&gt;, start &lt;int&gt;, end &lt;int&gt;,
 ## #   width &lt;int&gt;, strand &lt;fct&gt;, cpg_id &lt;chr&gt;, cpg_width &lt;chr&gt;,
 ## #   enhancers_id &lt;chr&gt;, enhancers_width &lt;chr&gt;, genes_gene_id &lt;chr&gt;,
-## #   genes_id &lt;chr&gt;, genes_symbol &lt;chr&gt;, genes_tx_id &lt;chr&gt;,
-## #   genes_width &lt;chr&gt;, imprinted_gene_placenta &lt;chr&gt;,
-## #   imprinted_gene_general &lt;chr&gt;, imprinted_dmr_general &lt;chr&gt;,
-## #   imprinted_dmr_placenta &lt;chr&gt;, group &lt;int&gt;, pmd_width &lt;int&gt;,
-## #   pmd_id &lt;chr&gt;</code></pre>
+## #   genes_id &lt;chr&gt;, genes_symbol &lt;chr&gt;, genes_tx_id &lt;chr&gt;, genes_width &lt;chr&gt;,
+## #   imprinted_dmr_general &lt;chr&gt;, imprinted_dmr_placenta &lt;chr&gt;, group &lt;int&gt;,
+## #   pmd_width &lt;int&gt;, pmd_id &lt;chr&gt;</code></pre>
 <div id="save-data" class="section level2">
 <h2>Save data</h2>
 <pre class="r"><code>saveRDS(anno, file = &#39;hg19_epic_annotation.rds&#39;)
@@ -998,29 +936,121 @@ saveRDS(anno_gr38, file = &#39;hg38_epic_annotation.rds&#39;)</code></pre>
 <h1>Column descriptions</h1>
 <pre class="r"><code>## column descriptors
 colnames(x)</code></pre>
-<pre><code>##  [1] &quot;cpg&quot;             &quot;chr&quot;             &quot;start&quot;          
-##  [4] &quot;end&quot;             &quot;cpg_id&quot;          &quot;cpg_width&quot;      
-##  [7] &quot;enhancers_id&quot;    &quot;enhancers_width&quot; &quot;genes_gene_id&quot;  
-## [10] &quot;genes_id&quot;        &quot;genes_symbol&quot;    &quot;genes_tx_id&quot;    
+<pre><code>##  [1] &quot;cpg&quot;             &quot;chr&quot;             &quot;start&quot;           &quot;end&quot;            
+##  [5] &quot;cpg_id&quot;          &quot;cpg_width&quot;       &quot;enhancers_id&quot;    &quot;enhancers_width&quot;
+##  [9] &quot;genes_gene_id&quot;   &quot;genes_id&quot;        &quot;genes_symbol&quot;    &quot;genes_tx_id&quot;    
 ## [13] &quot;genes_width&quot;</code></pre>
-<pre class="r"><code># cpg: cpg identifier
-# chr: chromosome position
-# start, end: cpg position in bp 
-# cpg_id: relation to cpg island features. uses UCSC cpg islands as reference, then definitions for shelves, shores, and seas are used
-# cpg_width: width in bp of the cpg island -related feature
-# enhancers_id: fantom5 enhancer
-# enhancers_width: width in bp of the fantom5 enhancer
-# genes_: columns are retrieved from txdb.hsapiens.ucsc.hg19.knowngene
-# genes_gene_id: I&#39;m not sure what this is TBH
-# genes_id: gene-related elemtn, e.g. promoters, introns/exons, based off of UCSC
-# genes_symbol: Gene symbol
-# genes_tx_id: transcript identifier
-# genes_width: width in bp of gene element
-# pmd_id, pmd_width: indicates which pmd a given cpg lies in. list taken from d.i.schoreder et al. 2013
-# imprinted_gene_: indicates the imprinted gene a given cpg lies in, placental or non-tissue specific
-# imprinted_dmr_: indicates the imprinted dmr a given cpg lies in, placental or non-tissue specific
-# imprinting regions/genes combined from several databases and primary articles, process by GDG.
-# columns prefixed by &#39;ilmn_&#39; come from the illumina provided annotation files</code></pre>
+<table>
+<colgroup>
+<col width="33%"></col>
+<col width="33%"></col>
+<col width="33%"></col>
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">column names</th>
+<th align="left">description</th>
+<th align="left"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">cpg</td>
+<td align="left">cpg identifier</td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">chr</td>
+<td align="left">chromosome position</td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">start, end</td>
+<td align="left">cpg position in bp</td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">cpg_id</td>
+<td align="left">relation to cpg island features. uses UCSC cpg islands as reference, then definitions for shelves, shores, and seas are used</td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">cpg_width</td>
+<td align="left">width in bp of the cpg island -related feature</td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">enhancers_id</td>
+<td align="left">fantom5 enhancer</td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">enhancers_width</td>
+<td align="left">width in bp of the fantom5 enhancer</td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">genes_</td>
+<td align="left">columns are retrieved from txdb.hsapiens.ucsc.hg19.knowngene</td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">genes_gene_id</td>
+<td align="left">Entrez ID</td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">genes_id</td>
+<td align="left">gene-related elemtn, e.g. promoters, introns/exons, based off of UCSC</td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">genes_symbol</td>
+<td align="left">Gene symbol.</td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">genes_tx_id</td>
+<td align="left">transcript identifier</td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">genes_width</td>
+<td align="left">width in bp of gene element</td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">pmd_id, pmd_width</td>
+<td align="left">indicates which pmd a given cpg lies in. list taken from d.i.schoreder et al. 2013</td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">imprinted_gene_</td>
+<td align="left">indicates the imprinted gene a given cpg lies in, placental or non-tissue specific</td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">imprinted_dmr_</td>
+<td align="left">indicates the imprinted dmr a given cpg lies in, placental or non-tissue specific</td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="even">
+<td align="left">imprinting regions/genes combined from several databases and primary articles, process by GDG.</td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="left">columns prefixed by ‘ilmn_’ come from the illumina provided annotation files</td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+</tbody>
+</table>
 </div>
 
 
@@ -1040,6 +1070,23 @@ $(document).ready(function () {
 
 
 </script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open')
+  });
+});
+</script>
+
+<!-- code folding -->
+
 
 <!-- dynamically load mathjax for compatibility with self-contained -->
 <script>
