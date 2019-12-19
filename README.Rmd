@@ -19,9 +19,9 @@ knitr::opts_chunk$set(echo=FALSE)
 
 This repository contains code for generating an annotation for the Illumina EPIC methylation array.
 
-There are two annotation files, one mapped to **hg19** and one mapped to **hg38/GR38**. They have the same
-annotation information (columns), but the hg38 annotation is missing 237 probes, since some mappings
-are lost from converting from hg19 to hg38.
+There are two annotation files, one mapped to **hg19** (`hg19_epic_annotation.rds`) and one mapped to **hg38/GR38** (`hg38_epic_annotation.rds`). They have the same annotation information (columns), but the hg38 annotation is missing 237 probes, since some mappings are lost from converting from hg19 to hg38.
+
+Currently these files are not git tracked because they are too large (~250 mb).
 
 ```{r include = F, message = F, warning = F }
 library(tidyverse)
@@ -30,9 +30,7 @@ library(kableExtra)
 
 ```{r, message = F, warning = F}
 anno <- readRDS(file = 'hg19_epic_annotation.rds')
-anno_gr38 <- readRDS(file = 'hg38_epic_annotation.rds')
 ```
-
 
 # The process
 
@@ -41,6 +39,8 @@ anno_gr38 <- readRDS(file = 'hg38_epic_annotation.rds')
 I started with the default annotations provided by Illumina. I used two files, the latest b4 annotation (*MethylationEPIC_v-1-0_B4.csv*), and the list of probes that are missing between b3 and b2 (*MethylationEPIC Missing Legacy CpG (v1.0_B3 vs. v1.0_B2) Annotations.csv*). Both can be found on the product files list from [Illumina's website](https://support.illumina.com/downloads/infinium-methylationepic-v1-0-product-files.html).
 
 Using the intersection of these two lists of probes, I used the provided genomic location (chromomsome and position) to map annotations to each cpg. Note that Illumina's provided annotations are based on hg19.
+
+> an example of the starting coordinates from Illumina that this annotation is based on
 
 ```{r}
 anno %>% select(cpg, chr, start) %>%
@@ -61,9 +61,11 @@ anno %>% select(cpg, chr, start, contains('ilmn')) %>%
 
 ## 2. Annotate cpgs
 
-I used the R package annotatr to access UCSC annotations for cpg islands and transcripts, and then FANTOM5 for enhancers.
+### Transcript-related features, enhancers, cpg islands
 
-### UCSC transcript and cpg island -related elements:
+I used the R package `annotatr` to access UCSC annotations for cpg islands / transcripts, and FANTOM5 for enhancers.
+
+> UCSC transcript and cpg island -related elements:
 
 ```{r}
 anno %>% select(cpg, chr, start, cpg_id:cpg_width, genes_id:genes_width) %>%
@@ -73,7 +75,7 @@ anno %>% select(cpg, chr, start, cpg_id:cpg_width, genes_id:genes_width) %>%
   scroll_box(width = '100%')
 ```
 
-### Enhancers
+> Enhancers
 
 ```{r}
 anno %>% select(cpg, chr, start, contains('enhancer')) %>%
@@ -84,7 +86,7 @@ anno %>% select(cpg, chr, start, contains('enhancer')) %>%
   scroll_box(width = '100%')
 ```
 
-### PMDs from Schroeder et al. 2013:
+### Placental partially methylated domains (PMDs) from Schroeder et al. 2013:
 
 Taken from the primary article.
 
@@ -99,13 +101,12 @@ anno %>% select(cpg, chr, start, contains('pmd')) %>%
 
 ### Imprinting regions
 
-Both general and placenta specific from GeneImprint and OTAGO databases, plus a court et al. and hanna et al. DMR imprinting papers.
-
-These imprinting information was summarized and provided by GDG
+These placental imprinted regions were collected from several sources. The merging of these regions into a combined resource is documented at [github.com/wvictor14/human_methylation_imprints](github.com/wvictor14/human_methylation_imprints).
 
 ```{r}
-anno %>% select(cpg, chr, start, contains('imprint')) %>%
-  filter(!is.na(imprinted_gene_placenta) | !is.na(imprinted_gene_general)) %>%
+anno %>% 
+  select(cpg, chr, start, contains('imprint')) %>%
+  filter(!is.na(imprint_tissue_specificity) | !is.na(imprint_methylated_allele)) %>%
   dplyr::slice(1:10) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
