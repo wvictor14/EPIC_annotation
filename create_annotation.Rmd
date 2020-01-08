@@ -355,11 +355,102 @@ imprint <- imprint %>%
          imprint_methylated_allele = methylated_allele,
          imprint_sources, imprint_region)
 
+# identify overlapping regions
+imprint %>%
+  group_by(imprint_tissue_specificity) %>%
+  mutate(previous_end = cummax(lag(end, default = 0)), # get the previous row's end or the cummax
+         new_group = (start >= previous_end),
+         group = cumsum(new_group))  
+
+
 anno <- anno %>% 
   genome_left_join(imprint, by = c('chr', 'start', 'end')) %>%
   dplyr::rename(chr = chr.x, start = start.x, end = end.x) %>%
-  select(-contains('.y'))
+  select(-contains('.y')) %>%
+  distinct() 
+   
 
+```
+
+# 5. Repeats
+
+From a Google group posting authored by Jonathon Casper, a member of the UCSC Genome Bioinformatics group:
+>    **Download the file [rmsk.txt.gz]** http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/rmsk.txt.gz, **and the accompanying [file rmsk.sql]** http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/rmsk.sql.
+>    The *first file is a compressed version of the data that you would get from the UCSC Table Browser* - it is around 137 MB instead of 450 MB. You will need a decompression program to extract the data from this file. The *second file (rmsk.sql) contains a short description of the fields that appear in the data*, very similar to the description that you see when you click the "describe table schema" button.
+>    Jonathan Casper
+>    UCSC Genome Bioinformatics Group
+    
+Explore data
+
+I decided to include the following RE elements:
+
+- ALU
+- ERV
+- ERV1
+- ERVK
+- ERVL
+- ERVL-MaLR
+- L1
+- L2
+
+```{r}
+# get column names from sql file - Oct 21 2019
+rmskNames <- c("bin",
+               "swScore",
+               "milliDiv",
+               "milliDel",
+               "milliIns",
+               "genoName",
+               "genoStart",
+               "genoEnd",
+               "genoLeft",
+               "strand",
+               "repName",
+               "repClass",
+               "repFamily",
+               "repStart",
+               "repEnd",
+               "repLeft",
+               "id")
+
+rmskData <- read_tsv(here::here("rmsk.txt"), col_names = rmskNames)
+rmskData %>% count(repFamily) %>% as.data.frame
+rmskData %>% count(repClass) %>% as.data.frame
+
+repeats <- rmskData %>%
+  filter(repFamily %in% c('Alu', 'ERV', 'ERV1', 'ERVK', 'ERVL', 'ERVL-MaLR', 'L1', 'L2')) 
+
+repeats <- repeats %>%
+  rename(chr = genoName,
+         start = genoStart,
+         end = genoEnd,
+         repeat_name = repName,
+         repeat_class = repClass,
+         repeat_family = repFamily) %>%
+  select(chr, start, end, repeat_name, repeat_class, repeat_family)
+```
+
+Join
+
+```{r}
+anno <- anno %>% 
+  
+  # join repeats
+  genome_left_join(repeats, by = c('chr', 'start', 'end')) %>%
+  dplyr::rename(chr = chr.x, start = start.x, end = end.x) %>%
+  select(-contains('.y')) %>%
+  distinct() %>%
+  
+  # remove cpgs that line up on the boundary of two distinct repeats
+  group_by(cpg) %>%
+  mutate(repeat_name = ifelse(n() > 1, NA, repeat_name),
+         repeat_class = ifelse(n() > 1, NA, repeat_class),
+         repeat_family = ifelse(n() > 1, NA, repeat_family)) %>%
+  ungroup() %>%
+  distinct() 
+
+anno %>% count(repeat_class)
+anno %>% count(repeat_family)
 ```
 
 # 5. Map from hg19 to hg38

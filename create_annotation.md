@@ -459,10 +459,266 @@ imprint <- imprint %>%
          imprint_methylated_allele = methylated_allele,
          imprint_sources, imprint_region)
 
+# identify overlapping regions
+imprint %>%
+  group_by(imprint_tissue_specificity) %>%
+  mutate(previous_end = cummax(lag(end, default = 0)), # get the previous row's end or the cummax
+         new_group = (start >= previous_end),
+         group = cumsum(new_group))  
+```
+
+```
+## # A tibble: 418 x 10
+## # Groups:   imprint_tissue_specificity [2]
+##    chr    start    end imprint_tissue_~ imprint_methyla~ imprint_sources
+##    <chr>  <dbl>  <dbl> <chr>            <chr>            <chr>          
+##  1 chr1  6.68e6 6.69e6 placental-speci~ M                Hanna 2016     
+##  2 chr1  7.83e6 7.83e6 other            M                Zink 2018      
+##  3 chr1  1.96e7 1.96e7 placental-speci~ M                Hanna 2016     
+##  4 chr1  3.62e7 3.62e7 placental-speci~ M                Hanna 2016     
+##  5 chr1  3.82e7 3.82e7 other            M                Hanna 2016     
+##  6 chr1  3.96e7 3.96e7 other            M                Zink 2018      
+##  7 chr1  4.00e7 4.00e7 other            M                Court 2014, Ha~
+##  8 chr1  5.49e7 5.49e7 placental-speci~ M                Hanna 2016     
+##  9 chr1  5.55e7 5.55e7 placental-speci~ M                Hanna 2016     
+## 10 chr1  6.78e7 6.78e7 placental-speci~ M                Hanna 2016     
+## # ... with 408 more rows, and 4 more variables: imprint_region <chr>,
+## #   previous_end <dbl>, new_group <lgl>, group <int>
+```
+
+```r
 anno <- anno %>% 
   genome_left_join(imprint, by = c('chr', 'start', 'end')) %>%
   dplyr::rename(chr = chr.x, start = start.x, end = end.x) %>%
-  select(-contains('.y'))
+  select(-contains('.y')) %>%
+  distinct() 
+```
+
+# 5. Repeats
+
+From a Google group posting authored by Jonathon Casper, a member of the UCSC Genome Bioinformatics group:
+>    **Download the file [rmsk.txt.gz]** http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/rmsk.txt.gz, **and the accompanying [file rmsk.sql]** http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/rmsk.sql.
+>    The *first file is a compressed version of the data that you would get from the UCSC Table Browser* - it is around 137 MB instead of 450 MB. You will need a decompression program to extract the data from this file. The *second file (rmsk.sql) contains a short description of the fields that appear in the data*, very similar to the description that you see when you click the "describe table schema" button.
+>    Jonathan Casper
+>    UCSC Genome Bioinformatics Group
+    
+Explore data
+
+I decided to include the following RE elements:
+
+- ALU
+- ERV
+- ERV1
+- ERVK
+- ERVL
+- ERVL-MaLR
+- L1
+- L2
+
+
+```r
+# get column names from sql file - Oct 21 2019
+rmskNames <- c("bin",
+               "swScore",
+               "milliDiv",
+               "milliDel",
+               "milliIns",
+               "genoName",
+               "genoStart",
+               "genoEnd",
+               "genoLeft",
+               "strand",
+               "repName",
+               "repClass",
+               "repFamily",
+               "repStart",
+               "repEnd",
+               "repLeft",
+               "id")
+
+rmskData <- read_tsv(here::here("rmsk.txt"), col_names = rmskNames)
+```
+
+```
+## Parsed with column specification:
+## cols(
+##   bin = col_double(),
+##   swScore = col_double(),
+##   milliDiv = col_double(),
+##   milliDel = col_double(),
+##   milliIns = col_double(),
+##   genoName = col_character(),
+##   genoStart = col_double(),
+##   genoEnd = col_double(),
+##   genoLeft = col_double(),
+##   strand = col_character(),
+##   repName = col_character(),
+##   repClass = col_character(),
+##   repFamily = col_character(),
+##   repStart = col_double(),
+##   repEnd = col_double(),
+##   repLeft = col_double(),
+##   id = col_double()
+## )
+```
+
+```r
+rmskData %>% count(repFamily) %>% as.data.frame
+```
+
+```
+##         repFamily       n
+## 1            acro      61
+## 2             Alu 1194734
+## 3           centr    2325
+## 4             CR1   61303
+## 5             Deu    1265
+## 6             DNA    2744
+## 7            DNA?    1881
+## 8         Dong-R4     556
+## 9             ERV     579
+## 10           ERV1  175937
+## 11           ERVK   10868
+## 12           ERVL  160346
+## 13      ERVL-MaLR  347105
+## 14          ERVL?    1854
+## 15          Gypsy   10892
+## 16         Gypsy?    7869
+## 17            hAT   12573
+## 18  hAT-Blackjack   19755
+## 19    hAT-Charlie  254646
+## 20     hAT-Tip100   30669
+## 21           hAT?    3050
+## 22       Helitron    1800
+## 23      Helitron?     436
+## 24             L1  951780
+## 25            L1?      84
+## 26             L2  466438
+## 27 Low_complexity  371543
+## 28            LTR    2206
+## 29           LTR?     122
+## 30         Merlin      57
+## 31            MIR  595094
+## 32           MuDR    1992
+## 33          Other    3733
+## 34      Penelope?      51
+## 35       PiggyBac    2120
+## 36      PiggyBac?     241
+## 37            RNA     729
+## 38           rRNA    1769
+## 39            RTE   17874
+## 40       RTE-BovB     655
+## 41      Satellite    6775
+## 42          scRNA    1340
+## 43  Simple_repeat  417913
+## 44           SINE     962
+## 45          SINE?     425
+## 46          snRNA    4386
+## 47         srpRNA    1481
+## 48          TcMar    1950
+## 49  TcMar-Mariner   16348
+## 50      TcMar-Tc2    8156
+## 51   TcMar-Tigger  104026
+## 52         TcMar?    3424
+## 53           telo     405
+## 54           tRNA    3670
+## 55        Unknown    7036
+## 56       Unknown?      97
+```
+
+```r
+rmskData %>% count(repClass) %>% as.data.frame
+```
+
+```
+##          repClass       n
+## 1             DNA  461751
+## 2            DNA?    1881
+## 3            LINE 1498690
+## 4           LINE?      51
+## 5  Low_complexity  371543
+## 6             LTR  717656
+## 7            LTR?     122
+## 8           Other    3733
+## 9              RC    2236
+## 10            RNA     729
+## 11           rRNA    1769
+## 12      Satellite    9566
+## 13          scRNA    1340
+## 14  Simple_repeat  417913
+## 15           SINE 1793723
+## 16          SINE?     425
+## 17          snRNA    4386
+## 18         srpRNA    1481
+## 19           tRNA    2002
+## 20        Unknown    7036
+## 21       Unknown?      97
+```
+
+```r
+repeats <- rmskData %>%
+  filter(repFamily %in% c('Alu', 'ERV', 'ERV1', 'ERVK', 'ERVL', 'ERVL-MaLR', 'L1', 'L2')) 
+
+repeats <- repeats %>%
+  rename(chr = genoName,
+         start = genoStart,
+         end = genoEnd,
+         repeat_name = repName,
+         repeat_class = repClass,
+         repeat_family = repFamily) %>%
+  select(chr, start, end, repeat_name, repeat_class, repeat_family)
+```
+
+Join
+
+
+```r
+anno <- anno %>% 
+  
+  # join repeats
+  genome_left_join(repeats, by = c('chr', 'start', 'end')) %>%
+  dplyr::rename(chr = chr.x, start = start.x, end = end.x) %>%
+  select(-contains('.y')) %>%
+  distinct() %>%
+  
+  # remove cpgs that line up on the boundary of two distinct repeats
+  group_by(cpg) %>%
+  mutate(repeat_name = ifelse(n() > 1, NA, repeat_name),
+         repeat_class = ifelse(n() > 1, NA, repeat_class),
+         repeat_family = ifelse(n() > 1, NA, repeat_family)) %>%
+  ungroup() %>%
+  distinct() 
+
+anno %>% count(repeat_class)
+```
+
+```
+## # A tibble: 4 x 2
+##   repeat_class      n
+##   <chr>         <int>
+## 1 LINE          54371
+## 2 LTR           43581
+## 3 SINE          23951
+## 4 <NA>         744933
+```
+
+```r
+anno %>% count(repeat_family)
+```
+
+```
+## # A tibble: 9 x 2
+##   repeat_family      n
+##   <chr>          <int>
+## 1 Alu            23951
+## 2 ERV               69
+## 3 ERV1           16589
+## 4 ERVK            1356
+## 5 ERVL            9850
+## 6 ERVL-MaLR      15717
+## 7 L1             29873
+## 8 L2             24498
+## 9 <NA>          744933
 ```
 
 # 5. Map from hg19 to hg38
@@ -590,25 +846,15 @@ anno %>%
 ```
 
 ```
-## # A tibble: 264 x 20
-## # Groups:   cpg [132]
-##    cpg   chr    start    end cpg_id cpg_width enhancers_id enhancers_width
-##    <chr> <chr>  <dbl>  <dbl> <chr>  <chr>     <chr>        <chr>          
-##  1 cg00~ chr4  1.55e8 1.55e8 island 1315      <NA>         <NA>           
-##  2 cg00~ chr4  1.55e8 1.55e8 island 1315      <NA>         <NA>           
-##  3 cg00~ chr4  1.55e8 1.55e8 shore  1246      enhancer     528            
-##  4 cg00~ chr4  1.55e8 1.55e8 shore  1246      enhancer     528            
-##  5 cg00~ chr7  2.43e7 2.43e7 island 1522      <NA>         <NA>           
-##  6 cg00~ chr7  2.43e7 2.43e7 island 1522      <NA>         <NA>           
-##  7 cg00~ chr2  2.29e8 2.29e8 shore  2000      <NA>         <NA>           
-##  8 cg00~ chr2  2.29e8 2.29e8 shore  2000      <NA>         <NA>           
-##  9 cg00~ chr4  1.55e8 1.55e8 shore  831       <NA>         <NA>           
-## 10 cg00~ chr4  1.55e8 1.55e8 shore  831       <NA>         <NA>           
-## # ... with 254 more rows, and 12 more variables: genes_gene_id <chr>,
-## #   genes_id <chr>, genes_symbol <chr>, genes_tx_id <chr>, genes_width <chr>,
-## #   group <int>, pmd_width <int>, pmd_id <chr>,
+## # A tibble: 0 x 23
+## # Groups:   cpg [0]
+## # ... with 23 variables: cpg <chr>, chr <chr>, start <dbl>, end <dbl>,
+## #   cpg_id <chr>, cpg_width <chr>, enhancers_id <chr>, enhancers_width <chr>,
+## #   genes_gene_id <chr>, genes_id <chr>, genes_symbol <chr>, genes_tx_id <chr>,
+## #   genes_width <chr>, group <int>, pmd_width <int>, pmd_id <chr>,
 ## #   imprint_tissue_specificity <chr>, imprint_methylated_allele <chr>,
-## #   imprint_sources <chr>, imprint_region <chr>
+## #   imprint_sources <chr>, imprint_region <chr>, repeat_name <chr>,
+## #   repeat_class <chr>, repeat_family <chr>
 ```
 
 ```r
@@ -618,25 +864,16 @@ anno_gr38 %>%
 ```
 
 ```
-## # A tibble: 264 x 22
-## # Groups:   cpg [132]
-##    cpg   chr    start    end width strand cpg_id cpg_width enhancers_id
-##    <chr> <fct>  <int>  <int> <int> <fct>  <chr>  <chr>     <chr>       
-##  1 cg00~ chr4  1.54e8 1.54e8     1 *      island 1315      <NA>        
-##  2 cg00~ chr4  1.54e8 1.54e8     1 *      island 1315      <NA>        
-##  3 cg00~ chr4  1.54e8 1.54e8     1 *      shore  1246      enhancer    
-##  4 cg00~ chr4  1.54e8 1.54e8     1 *      shore  1246      enhancer    
-##  5 cg00~ chr7  2.43e7 2.43e7     1 *      island 1522      <NA>        
-##  6 cg00~ chr7  2.43e7 2.43e7     1 *      island 1522      <NA>        
-##  7 cg00~ chr2  2.28e8 2.28e8     1 *      shore  2000      <NA>        
-##  8 cg00~ chr2  2.28e8 2.28e8     1 *      shore  2000      <NA>        
-##  9 cg00~ chr4  1.54e8 1.54e8     1 *      shore  831       <NA>        
-## 10 cg00~ chr4  1.54e8 1.54e8     1 *      shore  831       <NA>        
-## # ... with 254 more rows, and 13 more variables: enhancers_width <chr>,
-## #   genes_gene_id <chr>, genes_id <chr>, genes_symbol <chr>, genes_tx_id <chr>,
-## #   genes_width <chr>, group <int>, pmd_width <int>, pmd_id <chr>,
+## # A tibble: 0 x 25
+## # Groups:   cpg [0]
+## # ... with 25 variables: cpg <chr>, chr <fct>, start <int>, end <int>,
+## #   width <int>, strand <fct>, cpg_id <chr>, cpg_width <chr>,
+## #   enhancers_id <chr>, enhancers_width <chr>, genes_gene_id <chr>,
+## #   genes_id <chr>, genes_symbol <chr>, genes_tx_id <chr>, genes_width <chr>,
+## #   group <int>, pmd_width <int>, pmd_id <chr>,
 ## #   imprint_tissue_specificity <chr>, imprint_methylated_allele <chr>,
-## #   imprint_sources <chr>, imprint_region <chr>
+## #   imprint_sources <chr>, imprint_region <chr>, repeat_name <chr>,
+## #   repeat_class <chr>, repeat_family <chr>
 ```
 
 # 8. Save data
